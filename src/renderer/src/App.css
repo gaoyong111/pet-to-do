@@ -1,0 +1,591 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body, #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+}
+
+.app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    user-select: none;
+    -webkit-app-region: no-drag;
+}
+
+.app-container .no-drag {
+    -webkit-app-region: no-drag;
+}
+
+/* 四角调整大小手柄 */
+.resize-handle {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 1000;
+    -webkit-app-region: no-drag;
+}
+
+.resize-handle-nw {
+    top: 0;
+    left: 0;
+    cursor: nw-resize;
+}
+
+.resize-handle-ne {
+    top: 0;
+    right: 0;
+    cursor: ne-resize;
+}
+
+.resize-handle-sw {
+    bottom: 0;
+    left: 0;
+    cursor: sw-resize;
+}
+
+.resize-handle-se {
+    bottom: 0;
+    right: 0;
+    cursor: se-resize;
+}
+
+/* 设置按钮 - 极简设计 */
+.drag-handle {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #1f2937;
+    font-size: 18px;
+    cursor: move;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: all 0.2s ease;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    -webkit-app-region: drag;
+}
+
+.drag-handle:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.settings-toggle {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.92);
+    color: #1f2937;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+    transition: all 0.2s ease;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    -webkit-app-region: no-drag;
+}
+
+.settings-toggle:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* 设置面板 - 侧边栏设计 */
+.settings-sidebar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 260px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.98);
+    padding: 20px;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    overflow-y: auto;
+    z-index: 99;
+    animation: slideInRight 0.3s ease-out;
+    -webkit-app-region: no-drag;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(40px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+/* 滚动条 */
+.settings-sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.settings-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 2px;
+}
+
+/* 设置标题 */
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+}
+
+.settings-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: #111827;
+    letter-spacing: -0.01em;
+}
+
+.close-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #6b7280;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.close-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #1f2937;
+}
+
+/* 设置组 */
+.settings-group {
+    margin-bottom: 24px;
+}
+
+.settings-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 12px;
+}
+
+/* 当前状态 */
+.current-state-display {
+    background: #f9fafb;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    border: 1px solid #e5e7eb;
+}
+
+.current-state-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+/* 状态按钮网格 */
+.state-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.state-item {
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+}
+
+.state-item:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.state-item.active {
+    background: #1f2937;
+    color: #ffffff;
+    border-color: #1f2937;
+}
+
+/* 设置控件 */
+.settings-select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #1f2937;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.settings-select:hover {
+    border-color: #d1d5db;
+}
+
+.settings-select:focus {
+    outline: none;
+    border-color: #1f2937;
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
+}
+
+/* 双选择器 */
+.dual-select {
+    display: flex;
+    gap: 8px;
+}
+
+.dual-select .settings-select {
+    flex: 1;
+}
+
+/* 双输入框 */
+.dual-input {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.input-group label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #374151;
+}
+
+/* 滑块样式 */
+.settings-slider {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: #e5e7eb;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #1f2937;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.settings-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.settings-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #1f2937;
+    cursor: pointer;
+    border: none;
+    transition: all 0.15s ease;
+}
+
+.settings-slider::-moz-range-thumb:hover {
+    transform: scale(1.2);
+}
+
+/* 退出按钮 */
+.quit-btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #fee2e2;
+    color: #991b1b;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-top: 8px;
+}
+
+.quit-btn:hover {
+    background: #fecaca;
+}
+
+/* ===================== 右键快速添加任务浮层 ===================== */
+.context-quick-add {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.97);
+    border: 1px solid rgba(60, 185, 100, 0.3);
+    border-radius: 14px;
+    padding: 10px 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+    min-width: 240px;
+    animation: quickAddAppear 0.18s ease-out;
+}
+
+@keyframes quickAddAppear {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.context-quick-label {
+    font-size: 12px;
+    color: #2a7a44;
+    font-weight: 600;
+    margin-bottom: 7px;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.context-quick-row {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.context-quick-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 13px;
+    border: 1.5px solid rgba(60, 185, 100, 0.35);
+    border-radius: 9px;
+    outline: none;
+    background: rgba(240, 255, 245, 0.8);
+    color: #222;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    transition: border 0.15s, box-shadow 0.15s;
+}
+.context-quick-input:focus {
+    border-color: #3CBB64;
+    box-shadow: 0 0 0 2.5px rgba(60, 185, 100, 0.18);
+    background: rgba(255,255,255,0.95);
+}
+
+.context-quick-submit {
+    padding: 6px 12px;
+    background: #3CBB64;
+    color: white;
+    border: none;
+    border-radius: 9px;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    transition: background 0.15s;
+}
+.context-quick-submit:hover { background: #2da354; }
+
+.context-quick-cancel {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.07);
+    color: #666;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    padding: 0;
+    flex-shrink: 0;
+}
+.context-quick-cancel:hover { background: rgba(0,0,0,0.14); color: #333; }
+
+
+/* ====== 设置面板 - 操作按钮 ====== */
+.action-btn {
+    width: 100%;
+    padding: 10px 14px;
+    border: none;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.action-btn-tasks {
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+.action-btn-tasks:hover {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+/* 任务数量徽章 */
+.task-count-badge {
+    background: rgba(255, 255, 255, 0.9);
+    color: #6366f1;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 20px;
+    text-align: center;
+}
+
+/* 任务管理组 - 放在设置面板最上方 */
+.settings-group-tasks {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 20px;
+    border: 1px solid rgba(99, 102, 241, 0.1);
+}
+.settings-group-tasks .settings-group-label {
+    color: #6366f1;
+    font-size: 12px;
+    margin-bottom: 10px;
+}
+
+/* ====== Todo 独立窗口容器 ====== */
+.todo-window-container {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #f9fafb;
+    position: relative;
+    z-index: 1;
+}
+
+/* ====== Todo 弹窗样式 - Bento Grid 风格 ====== */
+.todo-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+    animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.todo-modal-content {
+    width: 1000px;
+    height: 680px;
+    background: #f9fafb;
+    border-radius: 24px;
+    box-shadow: 
+        0 25px 80px rgba(0, 0, 0, 0.35),
+        0 10px 30px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+    position: relative;
+    animation: scaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+@keyframes scaleIn {
+    from { 
+        opacity: 0;
+        transform: scale(0.92) translateY(20px);
+    }
+    to { 
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.todo-modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.05);
+    color: #6b7280;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.todo-modal-close:hover {
+    background: rgba(0, 0, 0, 0.1);
+    color: #374151;
+    transform: scale(1.05);
+}
+
+/* TodoApp 在弹窗中的适配 */
+.todo-modal-content .todo-app {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+}

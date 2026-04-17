@@ -1,0 +1,304 @@
+/* ===================== 气泡容器 ===================== */
+.bubble-container {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.bubble-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(-8px);
+}
+
+/* ===================== 气泡主体 ===================== */
+.bubble {
+  background: rgba(255, 255, 255, 0.97);
+  border-radius: 16px;
+  padding: 10px 14px 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  max-width: 230px;
+  min-width: 120px;
+  word-wrap: break-word;
+  position: relative;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  animation: bubbleFloat 3s ease-in-out infinite;
+}
+
+/* 有 actions/tasks 时禁用整体浮动动画，避免按钮难点 */
+.bubble:has(.bubble-actions),
+.bubble:has(.bubble-task-list) {
+  animation: none;
+}
+
+/* ===================== 关闭按钮 ===================== */
+.bubble-close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: rgba(0,0,0,0.08);
+  color: #666;
+  border-radius: 50%;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.15s;
+}
+.bubble-close:hover {
+  background: rgba(0,0,0,0.18);
+  color: #333;
+}
+
+/* ===================== 气泡文字 ===================== */
+.bubble-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #333;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  white-space: pre-wrap;
+  padding-right: 14px; /* 避免被关闭按钮遮住 */
+}
+
+/* ===================== 气泡尾巴 ===================== */
+.bubble-tail {
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid rgba(255, 255, 255, 0.97);
+}
+
+/* ===================== 气泡类型样式 ===================== */
+.bubble-emotion {
+  background: rgba(255, 242, 160, 0.97);
+  border-color: rgba(255, 200, 60, 0.25);
+}
+.bubble-emotion .bubble-tail { border-top-color: rgba(255, 242, 160, 0.97); }
+
+.bubble-info {
+  background: rgba(210, 232, 255, 0.97);
+  border-color: rgba(100, 170, 255, 0.25);
+}
+.bubble-info .bubble-tail { border-top-color: rgba(210, 232, 255, 0.97); }
+
+.bubble-system {
+  background: rgba(225, 225, 225, 0.97);
+  border-color: rgba(180, 180, 180, 0.25);
+}
+.bubble-system .bubble-tail { border-top-color: rgba(225, 225, 225, 0.97); }
+
+/* 提醒气泡：橙红色调 */
+.bubble-reminder {
+  background: rgba(255, 236, 210, 0.98);
+  border-color: rgba(255, 150, 50, 0.3);
+  border-width: 1.5px;
+}
+.bubble-reminder .bubble-tail { border-top-color: rgba(255, 236, 210, 0.98); }
+.bubble-reminder .bubble-text {
+  font-weight: 500;
+  color: #8B4000;
+}
+
+/* 任务气泡：薄荷绿调 */
+.bubble-todo {
+  background: rgba(225, 248, 235, 0.98);
+  border-color: rgba(60, 185, 100, 0.25);
+  max-width: 260px;
+}
+.bubble-todo .bubble-tail { border-top-color: rgba(225, 248, 235, 0.98); }
+.bubble-todo .bubble-text {
+  color: #1a5e36;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* ===================== 任务列表 ===================== */
+.bubble-task-list {
+  margin: 6px 0 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.bubble-task-list::-webkit-scrollbar {
+  width: 3px;
+}
+.bubble-task-list::-webkit-scrollbar-thumb {
+  background: rgba(60, 185, 100, 0.3);
+  border-radius: 2px;
+}
+
+.bubble-task-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 7px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.7);
+  cursor: pointer;
+  transition: background 0.15s;
+  user-select: none;
+}
+.bubble-task-item:hover {
+  background: rgba(255,255,255,0.95);
+}
+.bubble-task-item.completed {
+  opacity: 0.55;
+}
+
+.bubble-task-check {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+  color: #3CBB64;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+.bubble-task-check.checked {
+  transform: scale(1.1);
+}
+
+.bubble-task-title {
+  font-size: 12px;
+  color: #2a5030;
+  flex: 1;
+  line-height: 1.3;
+}
+.completed .bubble-task-title {
+  text-decoration: line-through;
+  color: #888;
+}
+
+.bubble-task-priority.high {
+  font-size: 11px;
+  color: #e84040;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* ===================== 快捷添加 ===================== */
+.bubble-quick-add {
+  display: flex;
+  gap: 5px;
+  margin: 6px 0 2px;
+}
+.bubble-quick-input {
+  flex: 1;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: 1px solid rgba(60, 185, 100, 0.4);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255,255,255,0.9);
+  color: #333;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.bubble-quick-input:focus {
+  border-color: #3CBB64;
+  box-shadow: 0 0 0 2px rgba(60, 185, 100, 0.15);
+}
+.bubble-quick-submit {
+  padding: 5px 10px;
+  font-size: 12px;
+  background: #3CBB64;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.bubble-quick-submit:hover {
+  background: #2da354;
+}
+
+/* ===================== 操作按钮区 ===================== */
+.bubble-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.bubble-action-btn {
+  flex: 1;
+  min-width: 60px;
+  padding: 5px 8px;
+  font-size: 12px;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.bubble-action-primary {
+  background: rgba(255, 150, 50, 0.85);
+  color: white;
+}
+.bubble-action-primary:hover {
+  background: rgba(230, 120, 20, 0.9);
+  transform: translateY(-1px);
+}
+
+/* todo 类型的 primary 按钮用绿色 */
+.bubble-todo .bubble-action-primary {
+  background: rgba(60, 185, 100, 0.85);
+}
+.bubble-todo .bubble-action-primary:hover {
+  background: rgba(40, 155, 75, 0.9);
+}
+
+.bubble-action-secondary {
+  background: rgba(0, 0, 0, 0.07);
+  color: #555;
+}
+.bubble-action-secondary:hover {
+  background: rgba(0, 0, 0, 0.13);
+  transform: translateY(-1px);
+}
+
+.bubble-action-danger {
+  background: rgba(220, 50, 50, 0.8);
+  color: white;
+}
+.bubble-action-danger:hover {
+  background: rgba(190, 30, 30, 0.9);
+}
+
+/* ===================== 浮动动画 ===================== */
+@keyframes bubbleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* ===================== 悬停效果（仅纯文字气泡） ===================== */
+.bubble:not(:has(.bubble-actions)):not(:has(.bubble-task-list)):hover {
+  cursor: pointer;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  transform: translateY(-2px);
+  transition: all 0.18s ease;
+}
+.bubble:not(:has(.bubble-actions)):not(:has(.bubble-task-list)):active {
+  transform: translateY(0);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}

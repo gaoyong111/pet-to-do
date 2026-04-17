@@ -1,0 +1,19 @@
+.pet-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pet-canvas {
+    cursor: grab;
+    display: block;
+}
+
+.pet-canvas:active {
+    cursor: grabbing;
+}

@@ -1,0 +1,1225 @@
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { TodoTask, TodoList, TaskStatus, TaskPriority } from '../../../shared/types';
+
+// 任务项组件
+const TaskItem = ({ 
+  task, 
+  onToggleStatus, 
+  onToggleImportant, 
+  onDelete, 
+  onStartEdit,
+  isEditing, 
+  editingTask, 
+  onUpdateEditingTask, 
+  onSaveEdit, 
+  onCancelEdit,
+  formatDueDate,
+  isOverdue
+}: {
+  task: TodoTask;
+  onToggleStatus: (taskId: string) => void;
+  onToggleImportant: (taskId: string, e: React.MouseEvent) => void;
+  onDelete: (taskId: string, e: React.MouseEvent) => void;
+  onStartEdit: (taskId: string, e: React.MouseEvent) => void;
+  isEditing: boolean;
+  editingTask: TodoTask | null;
+  onUpdateEditingTask: (field: keyof TodoTask, value: any) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  formatDueDate: (dueDate?: string) => string | null;
+  isOverdue: (task: TodoTask) => boolean;
+}) => {
+  if (isEditing && editingTask?.id === task.id) {
+    return (
+      <div className="task-item animate-fade-in">
+        <div className="task-checkbox" onClick={onSaveEdit}></div>
+        <div className="task-content">
+          <input
+            type="text"
+            className="task-edit-input"
+            value={editingTask.title || ''}
+            onChange={(e) => onUpdateEditingTask('title', e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveEdit();
+              if (e.key === 'Escape') onCancelEdit();
+            }}
+            autoFocus
+          />
+          <div className="task-edit-details">
+            <div className="task-edit-row">
+              <label>截止日期:</label>
+              <input
+                type="date"
+                value={editingTask.dueDate || ''}
+                onChange={(e) => onUpdateEditingTask('dueDate', e.target.value)}
+              />
+            </div>
+            <div className="task-edit-row">
+              <label>截止时间:</label>
+              <input
+                type="time"
+                value={editingTask.dueTime || ''}
+                onChange={(e) => onUpdateEditingTask('dueTime', e.target.value)}
+              />
+            </div>
+            <div className="task-edit-row">
+              <label>优先级:</label>
+              <select
+                value={editingTask.priority || 'medium'}
+                onChange={(e) => onUpdateEditingTask('priority', e.target.value)}
+              >
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+              </select>
+            </div>
+            <div className="task-edit-row">
+              <label>状态:</label>
+              <select
+                value={editingTask.status || 'todo'}
+                onChange={(e) => onUpdateEditingTask('status', e.target.value)}
+              >
+                <option value="todo">待办</option>
+                <option value="in-progress">进行中</option>
+                <option value="completed">已完成</option>
+              </select>
+            </div>
+            <div className="task-edit-row">
+              <label>重要:</label>
+              <input
+                type="checkbox"
+                checked={editingTask.isImportant || false}
+                onChange={(e) => onUpdateEditingTask('isImportant', e.target.checked)}
+              />
+            </div>
+            <div className="task-edit-row">
+              <label>我的一天:</label>
+              <input
+                type="checkbox"
+                checked={editingTask.inMyDay || false}
+                onChange={(e) => onUpdateEditingTask('inMyDay', e.target.checked)}
+              />
+            </div>
+          </div>
+          <div className="task-edit-actions">
+            <button className="task-edit-btn save" onClick={onSaveEdit}>
+              保存
+            </button>
+            <button className="task-edit-btn cancel" onClick={onCancelEdit}>
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="task-item animate-fade-in">
+      <div 
+        className={`task-checkbox ${task.status === 'completed' ? 'checked' : ''}`}
+        onClick={() => onToggleStatus(task.id)}
+      />
+      <div className="task-content">
+        <div className={`task-title ${task.status === 'completed' ? 'completed' : ''}`}>
+          {task.title}
+        </div>
+        <div className="task-meta">
+          {task.dueDate && (
+            <div className={`task-meta-item ${isOverdue(task) ? 'overdue' : ''}`}>
+              <span>📅</span>
+              <span>{formatDueDate(task.dueDate)}</span>
+              {task.dueTime && <span>{task.dueTime}</span>}
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="task-actions">
+        <div 
+          className={`task-important ${task.isImportant ? 'active' : ''}`}
+          onClick={(e) => onToggleImportant(task.id, e)}
+        >
+          {task.isImportant ? '⭐' : '☆'}
+        </div>
+        <div 
+          className="task-action-btn"
+          onClick={(e) => onStartEdit(task.id, e)}
+          title="编辑任务"
+        >
+          ✏️
+        </div>
+        <div 
+          className="task-action-btn delete"
+          onClick={(e) => onDelete(task.id, e)}
+          title="删除任务"
+        >
+          🗑️
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 侧边栏组件
+const Sidebar = ({ 
+  lists, 
+  selectedListId, 
+  onSelectList, 
+  getTaskCount 
+}: {
+  lists: TodoList[];
+  selectedListId: string;
+  onSelectList: (listId: string) => void;
+  getTaskCount: (listId: string) => number;
+}) => {
+  return (
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <h2>任务</h2>
+      </div>
+      {lists.map(list => (
+        <div
+          key={list.id}
+          className={`list-item ${list.isMyDay ? 'my-day' : ''} ${selectedListId === list.id ? 'active' : ''}`}
+          onClick={() => onSelectList(list.id)}
+        >
+          <div className="list-item-icon">
+            {list.isMyDay ? '☀️' : list.icon || '📋'}
+          </div>
+          <div className="list-item-name">{list.name}</div>
+          {getTaskCount(list.id) > 0 && (
+            <div className="list-item-count">{getTaskCount(list.id)}</div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// 快速添加任务组件
+const QuickAdd = ({ 
+  showQuickAdd, 
+  newTaskTitle, 
+  onToggleQuickAdd, 
+  onUpdateNewTaskTitle, 
+  onAddNewTask 
+}: {
+  showQuickAdd: boolean;
+  newTaskTitle: string;
+  onToggleQuickAdd: () => void;
+  onUpdateNewTaskTitle: (value: string) => void;
+  onAddNewTask: () => void;
+}) => {
+  if (!showQuickAdd) {
+    return (
+      <div 
+        className="quick-add"
+        onClick={onToggleQuickAdd}
+      >
+        <div className="quick-add-icon">+</div>
+        <div className="quick-add-text">添加任务</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="task-item animate-fade-in">
+      <div className="task-checkbox" onClick={onAddNewTask}></div>
+      <div className="task-content">
+        <input
+          type="text"
+          value={newTaskTitle}
+          onChange={(e) => onUpdateNewTaskTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onAddNewTask();
+            if (e.key === 'Escape') {
+              onToggleQuickAdd();
+              onUpdateNewTaskTitle('');
+            }
+          }}
+          placeholder="输入任务标题"
+          autoFocus
+          style={{
+            width: '100%',
+            border: 'none',
+            outline: 'none',
+            fontSize: '15px',
+            color: '#111827',
+            background: 'transparent'
+          }}
+        />
+      </div>
+    </div>
+  );
+};
+
+// 空状态组件
+const EmptyState = ({ selectedList }: { selectedList: TodoList | undefined }) => {
+  return (
+    <div className="empty-state">
+      <div className="empty-icon">
+        {selectedList?.isMyDay ? '☀️' : '✅'}
+      </div>
+      <h3>
+        {selectedList?.isMyDay ? '今天还没有任务' : '暂无任务'}
+      </h3>
+      <p>
+        {selectedList?.isMyDay 
+          ? '点击上方添加任务开始你的一天' 
+          : '点击上方添加新任务'}
+      </p>
+    </div>
+  );
+};
+
+// 主内容区组件
+const MainContent = ({ 
+  selectedList, 
+  showCompleted, 
+  onToggleShowCompleted, 
+  showQuickAdd, 
+  newTaskTitle, 
+  onToggleQuickAdd, 
+  onUpdateNewTaskTitle, 
+  onAddNewTask, 
+  filteredTasks, 
+  onToggleTaskStatus, 
+  onToggleImportant, 
+  onDeleteTask, 
+  onStartEditTask, 
+  editingTaskId, 
+  editingTask, 
+  onUpdateEditingTask, 
+  onSaveEditTask, 
+  onCancelEditTask,
+  formatDueDate,
+  isOverdue
+}: {
+  selectedList: TodoList | undefined;
+  showCompleted: boolean;
+  onToggleShowCompleted: () => void;
+  showQuickAdd: boolean;
+  newTaskTitle: string;
+  onToggleQuickAdd: () => void;
+  onUpdateNewTaskTitle: (value: string) => void;
+  onAddNewTask: () => void;
+  filteredTasks: TodoTask[];
+  onToggleTaskStatus: (taskId: string) => void;
+  onToggleImportant: (taskId: string, e: React.MouseEvent) => void;
+  onDeleteTask: (taskId: string, e: React.MouseEvent) => void;
+  onStartEditTask: (taskId: string, e: React.MouseEvent) => void;
+  editingTaskId: string | null;
+  editingTask: TodoTask | null;
+  onUpdateEditingTask: (field: keyof TodoTask, value: any) => void;
+  onSaveEditTask: () => void;
+  onCancelEditTask: () => void;
+  formatDueDate: (dueDate?: string) => string | null;
+  isOverdue: (task: TodoTask) => boolean;
+}) => {
+  return (
+    <div className="main-content">
+      <div className="main-header">
+        <h1>{selectedList?.name || '任务'}</h1>
+        {selectedList?.isMyDay && (
+          <p>{new Date().toLocaleDateString('zh-CN', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric',
+            weekday: 'long'
+          })}</p>
+        )}
+        <div className="show-completed-toggle">
+          <button 
+            className={`toggle-btn ${showCompleted ? 'active' : ''}`}
+            onClick={onToggleShowCompleted}
+          >
+            {showCompleted ? '隐藏已完成' : '显示已完成'}
+          </button>
+        </div>
+      </div>
+
+      <div className="tasks-container">
+        <QuickAdd
+          showQuickAdd={showQuickAdd}
+          newTaskTitle={newTaskTitle}
+          onToggleQuickAdd={onToggleQuickAdd}
+          onUpdateNewTaskTitle={onUpdateNewTaskTitle}
+          onAddNewTask={onAddNewTask}
+        />
+
+        {filteredTasks.length === 0 ? (
+          <EmptyState selectedList={selectedList} />
+        ) : (
+          filteredTasks.map(task => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              onToggleStatus={onToggleTaskStatus}
+              onToggleImportant={onToggleImportant}
+              onDelete={onDeleteTask}
+              onStartEdit={onStartEditTask}
+              isEditing={editingTaskId === task.id}
+              editingTask={editingTask}
+              onUpdateEditingTask={onUpdateEditingTask}
+              onSaveEdit={onSaveEditTask}
+              onCancelEdit={onCancelEditTask}
+              formatDueDate={formatDueDate}
+              isOverdue={isOverdue}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// 添加全局样式
+const style = document.createElement('style');
+style.textContent = `
+  /* 重置样式 */
+  .todo-app * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+  
+  /* 主容器 */
+  .todo-app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    background: #fafafc;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  }
+  
+  /* 侧边栏 */
+  .todo-app .sidebar {
+    width: 280px;
+    background: white;
+    border-right: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  /* 侧边栏头部 */
+  .todo-app .sidebar-header {
+    padding: 20px 16px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  
+  .todo-app .sidebar-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #111827;
+  }
+  
+  /* 列表项 */
+  .todo-app .list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  
+  .todo-app .list-item:hover {
+    background: #f9fafb;
+  }
+  
+  .todo-app .list-item.active {
+    background: #eff6ff;
+  }
+  
+  .todo-app .list-item-icon {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  
+  .todo-app .list-item-name {
+    flex: 1;
+    font-size: 14px;
+    color: #374151;
+  }
+  
+  .todo-app .list-item-count {
+    font-size: 12px;
+    color: #9ca3af;
+    background: #f3f4f6;
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  
+  /* 我的一天特殊样式 */
+  .todo-app .list-item.my-day {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    margin: 8px 12px;
+    border-radius: 8px;
+    color: white;
+  }
+  
+  .todo-app .list-item.my-day:hover {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+  }
+  
+  .todo-app .list-item.my-day.active {
+    background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  }
+  
+  .todo-app .list-item.my-day .list-item-name {
+    color: white;
+    font-weight: 500;
+  }
+  
+  .todo-app .list-item.my-day .list-item-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  
+  /* 主内容区 */
+  .todo-app .main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  
+  /* 主内容头部 */
+  .todo-app .main-header {
+    padding: 24px 32px;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .todo-app .main-header h1 {
+    font-size: 28px;
+    font-weight: 600;
+    color: #111827;
+    margin-bottom: 8px;
+  }
+  
+  .todo-app .main-header p {
+    font-size: 14px;
+    color: #6b7280;
+    margin-bottom: 12px;
+  }
+  
+  .todo-app .show-completed-toggle {
+    margin-top: 8px;
+  }
+  
+  .todo-app .toggle-btn {
+    padding: 6px 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: white;
+    color: #6b7280;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  
+  .todo-app .toggle-btn:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+  }
+  
+  .todo-app .toggle-btn.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+  }
+  
+  .todo-app .toggle-btn.active:hover {
+    background: #2563eb;
+  }
+  
+  /* 任务列表 */
+  .todo-app .tasks-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+  
+  /* 快速添加任务 */
+  .todo-app .quick-add {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: white;
+    border: 1px dashed #d1d5db;
+    border-radius: 8px;
+    margin-bottom: 24px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  
+  .todo-app .quick-add:hover {
+    border-color: #6366f1;
+    background: #f9fafb;
+  }
+  
+  .todo-app .quick-add-icon {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    font-size: 16px;
+  }
+  
+  .todo-app .quick-add-text {
+    font-size: 14px;
+    color: #6b7280;
+  }
+  
+  /* 任务项 */
+  .todo-app .task-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 16px;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+  }
+  
+  .todo-app .task-item:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    border-color: #e5e7eb;
+  }
+  
+  /* 复选框 */
+  .todo-app .task-checkbox {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #d1d5db;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  
+  .todo-app .task-checkbox:hover {
+    border-color: #6366f1;
+  }
+  
+  .todo-app .task-checkbox.checked {
+    background: #6366f1;
+    border-color: #6366f1;
+  }
+  
+  .todo-app .task-checkbox.checked::after {
+    content: '✓';
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+  }
+  
+  /* 任务内容 */
+  .todo-app .task-content {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .todo-app .task-title {
+    font-size: 15px;
+    color: #111827;
+    margin-bottom: 4px;
+    line-height: 1.4;
+  }
+  
+  .todo-app .task-title.completed {
+    text-decoration: line-through;
+    color: #9ca3af;
+  }
+  
+  .todo-app .task-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .todo-app .task-meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #6b7280;
+  }
+  
+  .todo-app .task-meta-item.overdue {
+    color: #dc2626;
+  }
+  
+  /* 重要标记 */
+  .todo-app .task-important {
+    cursor: pointer;
+    font-size: 18px;
+    color: #d1d5db;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
+    padding: 4px;
+  }
+  
+  .todo-app .task-important:hover {
+    color: #f59e0b;
+    transform: scale(1.1);
+  }
+  
+  .todo-app .task-important.active {
+    color: #f59e0b;
+  }
+  
+  /* 任务操作按钮 */
+  .todo-app .task-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  
+  .todo-app .task-action-btn {
+    padding: 6px;
+    cursor: pointer;
+    color: #9ca3af;
+    transition: all 0.15s ease;
+    font-size: 16px;
+    border-radius: 4px;
+  }
+  
+  .todo-app .task-action-btn:hover {
+    color: #6b7280;
+    background: #f3f4f6;
+  }
+  
+  .todo-app .task-action-btn.delete:hover {
+    color: #dc2626;
+    background: #fef2f2;
+  }
+  
+  /* 编辑模式 */
+  .todo-app .task-edit-input {
+    width: 100%;
+    border: 2px solid #6366f1;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 15px;
+    color: #111827;
+    outline: none;
+    background: #f9fafb;
+  }
+  
+  .todo-app .task-edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  
+  .todo-app .task-edit-btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  
+  .todo-app .task-edit-btn.save {
+    background: #6366f1;
+    color: white;
+    border: none;
+  }
+  
+  .todo-app .task-edit-btn.save:hover {
+    background: #4f46e5;
+  }
+  
+  .todo-app .task-edit-btn.cancel {
+    background: #f3f4f6;
+    color: #6b7280;
+    border: 1px solid #d1d5db;
+  }
+  
+  .todo-app .task-edit-btn.cancel:hover {
+    background: #e5e7eb;
+  }
+  
+  /* 任务编辑详情 */
+  .todo-app .task-edit-details {
+    margin-top: 12px;
+    padding: 12px;
+    background: #f9fafb;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+  }
+  
+  .todo-app .task-edit-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+  
+  .todo-app .task-edit-row:last-child {
+    margin-bottom: 0;
+  }
+  
+  .todo-app .task-edit-row label {
+    width: 80px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #4b5563;
+  }
+  
+  .todo-app .task-edit-row input[type="date"],
+  .todo-app .task-edit-row input[type="time"],
+  .todo-app .task-edit-row select {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+  
+  .todo-app .task-edit-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+  }
+  
+  /* 空状态 */
+  .todo-app .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 64px 24px;
+    text-align: center;
+  }
+  
+  .todo-app .empty-icon {
+    width: 64px;
+    height: 64px;
+    background: #f3f4f6;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+    font-size: 28px;
+  }
+  
+  .todo-app .empty-state h3 {
+    font-size: 18px;
+    font-weight: 500;
+    color: #111827;
+    margin-bottom: 8px;
+  }
+  
+  .todo-app .empty-state p {
+    font-size: 14px;
+    color: #6b7280;
+  }
+  
+  /* 动画 */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .todo-app .animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+  }
+`;
+
+// 组件卸载时清理样式
+let styleAdded = false;
+
+const addStyle = () => {
+  if (!styleAdded) {
+    document.head.appendChild(style);
+    styleAdded = true;
+  }
+};
+
+const removeStyle = () => {
+  if (styleAdded) {
+    document.head.removeChild(style);
+    styleAdded = false;
+  }
+};
+
+// 模拟数据
+const mockLists: TodoList[] = [
+  {
+    id: 'my-day',
+    name: '我的一天',
+    isMyDay: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'important',
+    name: '重要',
+    icon: '⭐',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'planned',
+    name: '已计划',
+    icon: '📅',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'tasks',
+    name: '任务',
+    icon: '📋',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+const mockTasks: TodoTask[] = [
+  {
+    id: '1',
+    listId: 'my-day',
+    title: '完成项目设计文档',
+    description: '需要完成项目的架构设计和技术选型',
+    status: 'in-progress',
+    priority: 'high',
+    isImportant: true,
+    inMyDay: true,
+    dueDate: new Date().toISOString().split('T')[0],
+    dueTime: '18:00',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: '2',
+    listId: 'tasks',
+    title: 'Review代码',
+    description: '检查团队成员的PR',
+    status: 'todo',
+    priority: 'medium',
+    isImportant: false,
+    inMyDay: false,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: '3',
+    listId: 'my-day',
+    title: '准备周会材料',
+    status: 'completed',
+    priority: 'medium',
+    isImportant: false,
+    inMyDay: true,
+    completedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+/**
+ * TodoApp 组件 - 任务管理应用
+ * 
+ * @description 提供完整的任务管理功能，包括任务的创建、编辑、删除、状态管理等
+ * @returns React 组件
+ */
+function TodoApp() {
+  // 组件挂载时添加样式
+  useEffect(() => {
+    addStyle();
+    
+    // 组件卸载时清理样式
+    return () => {
+      removeStyle();
+    };
+  }, []);
+
+  // 从本地存储加载数据
+  const loadFromLocalStorage = useCallback(() => {
+    try {
+      const savedLists = localStorage.getItem('todoLists');
+      const savedTasks = localStorage.getItem('todoTasks');
+      return {
+        lists: savedLists ? JSON.parse(savedLists) : mockLists,
+        tasks: savedTasks ? JSON.parse(savedTasks) : mockTasks
+      };
+    } catch (error) {
+      console.error('加载本地存储失败:', error);
+      return {
+        lists: mockLists,
+        tasks: mockTasks
+      };
+    }
+  }, []);
+
+  // 保存数据到本地存储
+  const saveToLocalStorage = useCallback((lists: TodoList[], tasks: TodoTask[]) => {
+    try {
+      localStorage.setItem('todoLists', JSON.stringify(lists));
+      localStorage.setItem('todoTasks', JSON.stringify(tasks));
+    } catch (error) {
+      console.error('保存本地存储失败:', error);
+    }
+  }, []);
+
+  const [lists, setLists] = useState<TodoList[]>(loadFromLocalStorage().lists);
+  const [tasks, setTasks] = useState<TodoTask[]>(loadFromLocalStorage().tasks);
+  const [selectedListId, setSelectedListId] = useState<string>('my-day');
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<TodoTask | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
+
+  // 监听数据变化并保存到本地存储
+  useEffect(() => {
+    saveToLocalStorage(lists, tasks);
+  }, [lists, tasks, saveToLocalStorage]);
+
+  // 获取当前选中的列表
+  const selectedList = useMemo(() => {
+    return lists.find(list => list.id === selectedListId);
+  }, [lists, selectedListId]);
+
+  // 获取当前列表的任务
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      // 首先按列表过滤
+      let listMatch = false;
+      if (selectedListId === 'my-day') {
+        listMatch = task.inMyDay;
+      } else if (selectedListId === 'important') {
+        listMatch = task.isImportant;
+      } else if (selectedListId === 'planned') {
+        listMatch = !!task.dueDate;
+      } else {
+        listMatch = task.listId === selectedListId;
+      }
+
+      // 然后按完成状态过滤
+      if (!showCompleted && task.status === 'completed') {
+        return false;
+      }
+
+      return listMatch;
+    });
+  }, [tasks, selectedListId, showCompleted]);
+
+  // 计算每个列表的任务数
+  const getTaskCount = useCallback((listId: string) => {
+    if (listId === 'my-day') {
+      return tasks.filter(t => t.inMyDay && (showCompleted || t.status !== 'completed')).length;
+    }
+    if (listId === 'important') {
+      return tasks.filter(t => t.isImportant && (showCompleted || t.status !== 'completed')).length;
+    }
+    if (listId === 'planned') {
+      return tasks.filter(t => !!t.dueDate && (showCompleted || t.status !== 'completed')).length;
+    }
+    return tasks.filter(t => t.listId === listId && (showCompleted || t.status !== 'completed')).length;
+  }, [tasks, showCompleted]);
+
+  // 切换任务完成状态
+  const toggleTaskStatus = useCallback((taskId: string) => {
+    setTasks(prevTasks => prevTasks.map(task => {
+      if (task.id !== taskId) return task;
+      
+      let newStatus: TaskStatus;
+      if (task.status === 'completed') {
+        newStatus = 'todo';
+      } else if (task.status === 'todo') {
+        newStatus = 'in-progress';
+      } else {
+        newStatus = 'completed';
+      }
+      
+      return {
+        ...task,
+        status: newStatus,
+        completedAt: newStatus === 'completed' ? new Date().toISOString() : undefined,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+  }, []);
+
+  // 切换重要标记
+  const toggleImportant = useCallback((taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTasks(prevTasks => prevTasks.map(task => {
+      if (task.id !== taskId) return task;
+      return {
+        ...task,
+        isImportant: !task.isImportant,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+  }, []);
+
+  // 删除任务
+  const deleteTask = useCallback((taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('确定要删除这个任务吗？')) {
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId));
+    }
+  }, []);
+
+  // 开始编辑任务
+  const startEditTask = useCallback((taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      setEditingTaskId(taskId);
+      setEditingTask({...task});
+    }
+  }, [tasks]);
+
+  // 保存编辑任务
+  const saveEditTask = useCallback(() => {
+    if (!editingTaskId || !editingTask) {
+      setEditingTaskId(null);
+      setEditingTask(null);
+      return;
+    }
+
+    setTasks(prevTasks => prevTasks.map(task => {
+      if (task.id !== editingTaskId) return task;
+      return {
+        ...editingTask,
+        updatedAt: new Date().toISOString()
+      };
+    }));
+
+    setEditingTaskId(null);
+    setEditingTask(null);
+  }, [editingTaskId, editingTask]);
+
+  // 取消编辑任务
+  const cancelEditTask = useCallback(() => {
+    setEditingTaskId(null);
+    setEditingTask(null);
+  }, []);
+
+  // 更新编辑任务字段
+  const updateEditingTask = useCallback((field: keyof TodoTask, value: any) => {
+    setEditingTask(prevTask => {
+      if (!prevTask) return null;
+      return {
+        ...prevTask,
+        [field]: value
+      };
+    });
+  }, []);
+
+  // 添加新任务
+  const addNewTask = useCallback(() => {
+    if (!newTaskTitle.trim()) return;
+
+    let listIdForNewTask;
+    if (selectedListId === 'my-day' || selectedListId === 'important' || selectedListId === 'planned') {
+      listIdForNewTask = 'tasks';
+    } else {
+      listIdForNewTask = selectedListId;
+    }
+
+    const newTask: TodoTask = {
+      id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+      listId: listIdForNewTask,
+      title: newTaskTitle.trim(),
+      status: 'todo',
+      priority: 'medium',
+      isImportant: selectedListId === 'important',
+      inMyDay: selectedListId === 'my-day',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    setTasks(prevTasks => [newTask, ...prevTasks]);
+    setNewTaskTitle('');
+    setShowQuickAdd(false);
+  }, [newTaskTitle, selectedListId]);
+
+  // 格式化日期显示
+  const formatDueDate = useCallback((dueDate?: string) => {
+    if (!dueDate) return null;
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+    
+    if (dueDate === today) return '今天';
+    if (dueDate === tomorrow) return '明天';
+    
+    const date = new Date(dueDate);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    return `${month}月${day}日`;
+  }, []);
+
+  // 检查是否过期
+  const isOverdue = useCallback((task: TodoTask) => {
+    if (!task.dueDate || task.status === 'completed') return false;
+    const today = new Date().toISOString().split('T')[0];
+    return task.dueDate < today;
+  }, []);
+
+  return (
+    <div className="todo-app">
+      <Sidebar
+        lists={lists}
+        selectedListId={selectedListId}
+        onSelectList={setSelectedListId}
+        getTaskCount={getTaskCount}
+      />
+      <MainContent
+        selectedList={selectedList}
+        showCompleted={showCompleted}
+        onToggleShowCompleted={() => setShowCompleted(!showCompleted)}
+        showQuickAdd={showQuickAdd}
+        newTaskTitle={newTaskTitle}
+        onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
+        onUpdateNewTaskTitle={setNewTaskTitle}
+        onAddNewTask={addNewTask}
+        filteredTasks={filteredTasks}
+        onToggleTaskStatus={toggleTaskStatus}
+        onToggleImportant={toggleImportant}
+        onDeleteTask={deleteTask}
+        onStartEditTask={startEditTask}
+        editingTaskId={editingTaskId}
+        editingTask={editingTask}
+        onUpdateEditingTask={updateEditingTask}
+        onSaveEditTask={saveEditTask}
+        onCancelEditTask={cancelEditTask}
+        formatDueDate={formatDueDate}
+        isOverdue={isOverdue}
+      />
+    </div>
+  );
+}
+
+export default TodoApp;
