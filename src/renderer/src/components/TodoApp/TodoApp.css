@@ -71,6 +71,67 @@
   color: #374151;
 }
 
+/* 侧边栏添加任务按钮 */
+.todo-app .sidebar-add-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  margin-right: 8px;
+}
+
+.todo-app .sidebar-add-btn:hover {
+  background: rgba(37, 99, 235, 0.2);
+  transform: scale(1.05);
+}
+
+/* 侧边栏添加任务输入区 */
+.todo-app .sidebar-add-task {
+  padding: 10px 16px 12px;
+  border-bottom: 1px solid rgba(243, 244, 246, 0.8);
+}
+
+.todo-app .sidebar-add-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #111827;
+  background: #f9fafb;
+  outline: none;
+  transition: border-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.todo-app .sidebar-add-input:focus {
+  border-color: #2563eb;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.todo-app .sidebar-add-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+
+.todo-app .btn-sm {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
 /* 列表容器 */
 .todo-app .sidebar-lists {
   flex: 1;
@@ -140,36 +201,29 @@
   font-weight: 600;
 }
 
-/* 我的一天 - 渐变卡片 */
+/* 今日待办 - 渐变卡片 */
+/* my-day 常驻布局（无论是否选中，保持稳定不抖动） */
 .todo-app .list-item.my-day {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   margin: 8px 12px;
   border-radius: 14px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.25);
-}
-
-.todo-app .list-item.my-day:hover {
-  background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.35);
 }
 
 .todo-app .list-item.my-day.active {
-  background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.todo-app .list-item.my-day .list-item-icon {
+.todo-app .list-item.my-day.active .list-item-icon {
   background: rgba(255, 255, 255, 0.2);
   box-shadow: none;
 }
 
-.todo-app .list-item.my-day .list-item-name {
+.todo-app .list-item.my-day.active .list-item-name {
   color: white;
   font-weight: 600;
 }
 
-.todo-app .list-item.my-day .list-item-count {
+.todo-app .list-item.my-day.active .list-item-count {
   background: rgba(255, 255, 255, 0.2);
   color: white;
 }

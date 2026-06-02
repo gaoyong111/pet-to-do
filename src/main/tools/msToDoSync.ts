@@ -440,31 +440,14 @@ class MsTodoSync {
       microsoftToDoId: l.id
     }));
 
-    // 找到"我的一天"列表（通常显示名称为 "我的一天" 或 "My Day"）
-    const myDayList = msLists.find(l => 
-      l.displayName === '我的一天' || 
-      l.displayName === 'My Day' ||
-      l.displayName.toLowerCase().includes('my day')
-    );
-
     for (const list of msLists) {
-      const isMyDayList = myDayList && list.id === myDayList.id;
       let nextLink = `/me/todo/lists/${list.id}/tasks?$top=100`;
       while (nextLink) {
         const res = await this.graphGet<{ value: MsTodoTask[]; '@odata.nextLink'?: string }>(
           nextLink.startsWith('https://') ? nextLink.replace('https://graph.microsoft.com/v1.0', '') : nextLink
         );
         for (const t of res.value) {
-          const task = this.msTaskToLocal(t, `ms-${list.id}`, list.id, isMyDayList);
-          
-          // 如果不是"我的一天"列表，但任务已经在 allTasks 中且标记为 inMyDay，不要覆盖
-          if (!isMyDayList) {
-            const existingTask = allTasks.find(et => et.id === task.id);
-            if (existingTask && existingTask.inMyDay) {
-              continue;
-            }
-          }
-          
+          const task = this.msTaskToLocal(t, `ms-${list.id}`, list.id);
           allTasks.push(task);
         }
         nextLink = res['@odata.nextLink']
@@ -473,11 +456,10 @@ class MsTodoSync {
       }
     }
 
-    // 去重任务，保留 inMyDay 为 true 的版本
+    // 去重任务
     const uniqueTasksMap = new Map();
     for (const task of allTasks) {
-      const existingTask = uniqueTasksMap.get(task.id);
-      if (!existingTask || (task.inMyDay && !existingTask.inMyDay)) {
+      if (!uniqueTasksMap.has(task.id)) {
         uniqueTasksMap.set(task.id, task);
       }
     }
@@ -486,7 +468,7 @@ class MsTodoSync {
   }
 
   /** 将 MS 任务转换为本地格式 */
-  private msTaskToLocal(t: MsTodoTask, listId: string, msListId: string, isMyDayList: boolean = false): any {
+  private msTaskToLocal(t: MsTodoTask, listId: string, msListId: string): any {
     const priority = t.importance === 'high' ? 'high' : t.importance === 'low' ? 'low' : 'medium';
     const status = t.status === 'completed' ? 'completed' : 'todo';
     return {
@@ -497,24 +479,22 @@ class MsTodoSync {
       status,
       priority,
       isImportant: t.importance === 'high',
-      inMyDay: isMyDayList || false,  // 如果是"我的一天"列表，标记为 inMyDay
       dueDate: t.dueDateTime?.dateTime?.slice(0, 10),
       dueTime: t.dueDateTime?.dateTime?.slice(11, 16),
       createdAt: t.lastModifiedDateTime,
       updatedAt: t.lastModifiedDateTime,
       microsoftToDoId: t.id,
       microsoftToDoListId: msListId,
-      source: 'microsoft' as const  // 标记为从 MS 同步的任务
+      source: 'microsoft' as const
     };
   }
 
   /**
-   * 推送本地任务到 MS To Do（仅推送有 microsoftToDoId 的，或新建）
+   * 推送本地任务到 MS To Do
    * @param task 本地任务
    * @param msListId MS 列表 ID
-   * @param syncMyDay 是否同步"我的一天"状态（默认为 true）
    */
-  async pushTaskToMsTodo(task: any, msListId: string, syncMyDay: boolean = true): Promise<string | null> {
+  async pushTaskToMsTodo(task: any, msListId: string): Promise<string | null> {
     const body: any = {
       title: task.title,
       importance: task.priority === 'high' ? 'high' : task.priority === 'low' ? 'low' : 'normal',
@@ -525,10 +505,6 @@ class MsTodoSync {
     }
     if (task.dueDate) {
       body.dueDateTime = { dateTime: `${task.dueDate}T${task.dueTime || '09:00'}:00`, timeZone: 'Asia/Shanghai' };
-    }
-    // 同步"我的一天"状态
-    if (syncMyDay) {
-      body.isMyDayEnabled = task.inMyDay || false;
     }
 
     if (task.microsoftToDoId) {

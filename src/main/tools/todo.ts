@@ -374,6 +374,20 @@ class TodoSystem {
     });
   }
   /**
+   * 批量替换所有任务（用于 MS 同步后合并）
+   * @param tasks 新任务列表
+   */
+  setAllTasks(tasks: TodoTask[]): void {
+    this.tasks = tasks;
+    this.saveTasks();
+    this.emitEvent({
+      type: 'add',
+      task: null as any,
+      tasks: this.tasks
+    });
+  }
+
+  /**
    * 清空所有任务
    */
   clearAllTasks(): void {

@@ -166,6 +166,13 @@ contextBridge.exposeInMainWorld('petAPI', {
     },
 
     /**
+     * 批量替换所有任务（用于 MS 同步后写入）
+     */
+    taskSetAll: (tasks: any[]): Promise<boolean> => {
+      return ipcRenderer.invoke('task-set-all', tasks);
+    },
+
+    /**
      * 获取单个任务
      */
     taskGet: (id: string): Promise<any> => {
@@ -254,6 +261,48 @@ contextBridge.exposeInMainWorld('petAPI', {
      */
     openTodoWindow: (): Promise<boolean> => {
       return ipcRenderer.invoke('open-todo-window');
+    },
+
+    /**
+     * 切换任务管理窗口（开→关、关→开）
+     */
+    toggleTodoWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('toggle-todo-window');
+    },
+
+    /**
+     * 打开设置窗口（独立窗口）
+     */
+    openSettingsWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('open-settings-window');
+    },
+
+    /**
+     * 切换设置窗口（开→关、关→开）
+     */
+    toggleSettingsWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('toggle-settings-window');
+    },
+
+    /**
+     * 打开提醒窗口（独立窗口）
+     */
+    openReminderWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('open-reminder-window');
+    },
+
+    /**
+     * 切换提醒窗口（开→关、关→开）
+     */
+    toggleReminderWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('toggle-reminder-window');
+    },
+
+    /**
+     * 中转消息到主窗口
+     */
+    relayToMain: (channel: string, ...args: any[]): Promise<boolean> => {
+      return ipcRenderer.invoke('relay-to-main', channel, ...args);
     },
 
     // === Microsoft To Do 同步 ===
@@ -358,5 +407,21 @@ contextBridge.exposeInMainWorld('petAPI', {
         };
         ipcRenderer.on('switch-skin', handler);
         return () => ipcRenderer.removeListener('switch-skin', handler);
+    },
+
+    /**
+     * 通用事件监听
+     */
+    on: (channel: string, callback: (...args: any[]) => void): void => {
+        ipcRenderer.on(channel, (_event: Electron.IpcRendererEvent, ...args: any[]) => {
+            callback(...args);
+        });
+    },
+
+    /**
+     * 通用事件移除
+     */
+    removeListener: (channel: string, callback: (...args: any[]) => void): void => {
+        ipcRenderer.removeListener(channel, callback);
     }
-});
+  });

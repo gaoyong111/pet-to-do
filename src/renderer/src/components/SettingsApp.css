@@ -1,0 +1,222 @@
+/* ====== 窗口容器 ====== */
+.settings-window {
+    width: 100%;
+    min-height: 100vh;
+    padding: 24px 28px 36px;
+    overflow-y: auto;
+    background: #eceef3;
+    box-sizing: border-box;
+    font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.settings-window-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #1d1e22;
+    margin: 0 0 20px 0;
+}
+
+/* ===== 分区标题 ====== */
+.section-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #868b98;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 20px 0 10px;
+    padding-left: 2px;
+}
+
+.section-header:first-of-type {
+    margin-top: 0;
+}
+
+/* ===== 卡片 ====== */
+.settings-card {
+    background: #ffffff;
+    border-radius: 8px;
+    border: 1px solid #dddde5;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+}
+
+/* ===== 状态选择器：横排大胶囊 ===== */
+.state-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+}
+
+.state-pill {
+    padding: 7px 15px;
+    border-radius: 18px;
+    border: 1px solid #d5d9e3;
+    background: #f8f9fb;
+    color: #555b6a;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.state-pill:hover {
+    border-color: #8b93c8;
+    background: #eeeff5;
+    color: #404658;
+}
+
+.state-pill.active {
+    background: #444860;
+    border-color: #444860;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+/* ===== 下拉框行 ====== */
+.select-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.select-row-label {
+    font-size: 13px;
+    color: #333842;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.settings-select {
+    min-width: 160px;
+    padding: 7px 28px 7px 12px;
+    border: 1px solid #d5d9e3;
+    border-radius: 6px;
+    background: #f8f9fb;
+    font-size: 13px;
+    color: #333842;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.12s;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M1 3l4 4 4-4' fill='none' stroke='%23999eb0' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+}
+
+.settings-select:focus {
+    border-color: #888bb8;
+}
+
+/* ===== 双列皮肤选择 ====== */
+.skin-row {
+    display: flex;
+    gap: 12px;
+}
+
+.skin-col {
+    flex: 1;
+}
+
+.skin-col-label {
+    font-size: 11px;
+    color: #999aa6;
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.skin-col .settings-select {
+    width: 100%;
+    min-width: 0;
+}
+
+/* ===== 开关列表项 ====== */
+.switch-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 4px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #f3f4f6;
+    transition: background 0.08s;
+}
+
+.switch-item:last-child {
+    border-bottom: none;
+}
+
+.switch-item:hover {
+    background: #fafafc;
+    border-radius: 4px;
+}
+
+.switch-label {
+    font-size: 13px;
+    color: #353a48;
+    font-weight: 400;
+}
+
+/* Toggle 开关 */
+.toggle-switch {
+    position: relative;
+    width: 38px;
+    height: 21px;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.track {
+    width: 100%;
+    height: 100%;
+    border-radius: 21px;
+    background: #c8ccd6;
+    transition: background 0.18s;
+}
+
+.toggle-switch.on .track {
+    background: #30a46c;
+}
+
+.thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toggle-switch.on .thumb {
+    transform: translateX(17px);
+}
+
+/* ===== 退出按钮 ====== */
+.quit-btn {
+    display: block;
+    width: 100%;
+    padding: 9px;
+    border: 1px solid #f5c6c6;
+    border-radius: 6px;
+    background: #fff;
+    color: #c53030;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.12s;
+}
+
+.quit-btn:hover {
+    background: #c53030;
+    border-color: #c53030;
+    color: #fff;
+}

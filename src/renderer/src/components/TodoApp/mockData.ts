@@ -19,7 +19,6 @@ export const mockTasks: TodoTask[] = [
     status: 'in-progress',
     priority: 'high',
     isImportant: true,
-    inMyDay: true,
     dueDate: new Date().toISOString().split('T')[0],
     dueTime: '18:00',
     createdAt: new Date().toISOString(),
@@ -33,7 +32,6 @@ export const mockTasks: TodoTask[] = [
     status: 'todo',
     priority: 'medium',
     isImportant: false,
-    inMyDay: false,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   },
@@ -44,7 +42,6 @@ export const mockTasks: TodoTask[] = [
     status: 'completed',
     priority: 'medium',
     isImportant: false,
-    inMyDay: true,
     completedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()

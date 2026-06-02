@@ -3,12 +3,17 @@ import { PetState } from './types';
 import { StateMachine } from './state/stateMachine';
 import Pet from './components/Pet';
 import Pomodoro from './components/Pomodoro';
-import Reminder from './components/Reminder';
+import ReminderApp from './components/ReminderApp';
+import SettingsApp from './components/SettingsApp';
 import Bubble, { BubbleRef } from './components/Bubble';
 import TodoApp from './components/TodoApp';
 import ErrorBoundary from './components/TodoApp/ErrorBoundary';
+import { TodoLauncher } from './components/TodoLauncher';
+import { mergeMsTasks } from './components/TodoApp/utils/msSync';
+import { isInTodayView } from './components/TodoApp/utils/taskFilter';
+import { useTodoStore } from './components/TodoApp/store/useTodoStore';
 import usePetEvents from './hooks/usePetEvents';
-import { getLocale, setLocale, subscribeLocaleChange, getAvailableLocales, Locale, t } from './i18n';
+import { getLocale, setLocale, subscribeLocaleChange, Locale, t } from './i18n';
 import { getDialogueManager } from './utils/dialogueSystem';
 import './App.css';
 
@@ -89,7 +94,25 @@ function App(): JSX.Element {
     const [supportedStates, setSupportedStates] = useState<string[]>(['idle', 'working', 'happy', 'sad', 'sleeping', 'shy', 'angry', 'surprised']);
     const [stateLabels, setStateLabels] = useState<Record<string, string>>(getStateLabels());
     const [currentLocale, setCurrentLocale] = useState<Locale>(getLocale());
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [showPomodoro, setShowPomodoro] = useState(() => {
+        const saved = localStorage.getItem('pet-show-pomodoro');
+        return saved !== null ? saved === 'true' : true;
+    });
+    const [showReminder, setShowReminder] = useState(() => {
+        const saved = localStorage.getItem('pet-show-reminder');
+        return saved !== null ? saved === 'true' : true;
+    });
+    const [showTodoLauncher, setShowTodoLauncher] = useState(() => {
+        const saved = localStorage.getItem('pet-show-todolauncher');
+        return saved !== null ? saved === 'true' : true;
+    });
+    /** 激活的提醒数量 */
+    const [reminderCount, setReminderCount] = useState(0);
+    /** 是否在图标上显示提醒数量 */
+    const [showReminderBadge, setShowReminderBadge] = useState(() => {
+        const saved = localStorage.getItem('pet-show-reminder-badge');
+        return saved !== null ? saved === 'true' : true;
+    });
     const [windowSize, setWindowSize] = useState({ width: 640, height: 800 });
     const [currentRoute, setCurrentRoute] = useState(window.location.hash.slice(1) || '');
     /** 任务数量（用于设置面板显示） */
@@ -220,6 +243,49 @@ function App(): JSX.Element {
         return () => clearInterval(timer);
     }, []);
 
+    /**
+     * 启动时自动同步 MS To Do
+     */
+    useEffect(() => {
+        const autoSync = async () => {
+            if (!window.petAPI?.msTodoStatus || !window.petAPI?.msTodoPull || !window.petAPI?.taskGetAll || !window.petAPI?.taskSetAll) return;
+
+            try {
+                const status = await window.petAPI.msTodoStatus();
+                if (!status.authorized) return;
+
+                const result = await window.petAPI.msTodoPull();
+                if (result.error || !result.tasks?.length) return;
+
+                // 获取本地现有任务
+                const localTasks = await window.petAPI.taskGetAll();
+
+                // 合并 MS 任务与本地任务
+                const merged = mergeMsTasks(localTasks, result.tasks);
+
+                // 写回主进程持久化
+                await window.petAPI.taskSetAll(merged);
+
+                // 同步到 store（如果 Todo 窗口后续打开，能拿到最新数据）
+                useTodoStore.getState().setTasks(merged);
+
+                if (result.lists?.length) {
+                    useTodoStore.getState().setLists(result.lists);
+                    const msList = result.lists.find((l: any) => l.microsoftToDoId);
+                    if (msList) {
+                        useTodoStore.getState().setDefaultMsListId(msList.id);
+                    }
+                }
+
+                console.log(`[AutoSync] 同步完成，${merged.length} 条任务`);
+            } catch (e) {
+                console.error('[AutoSync] 同步失败:', e);
+            }
+        };
+
+        autoSync();
+    }, []);
+
     useEffect(() => {
         loadSkinStates(currentSkin);
     }, [loadSkinStates, currentSkin]);
@@ -240,6 +306,50 @@ function App(): JSX.Element {
 
         const unsubscribeSkinSwitch = window.petAPI.onSkinSwitch(handleSkinSwitch);
 
+        // 监听来自设置窗口的状态变更
+        if (window.petAPI) {
+            const handleSetPetState = (state: PetState) => {
+                stateMachine.transition(state);
+            };
+            window.petAPI.on('set-pet-state', handleSetPetState);
+
+            const handleSetLocale = (locale: Locale) => {
+                setLocale(locale);
+            };
+            window.petAPI.on('set-locale', handleSetLocale);
+
+            const handlePomodoroVisibility = (visible: boolean) => {
+                setShowPomodoro(visible);
+            };
+            window.petAPI.on('pomodoro-visibility', handlePomodoroVisibility);
+
+            const handleReminderVisibility = (visible: boolean) => {
+                setShowReminder(visible);
+            };
+            window.petAPI.on('reminder-visibility', handleReminderVisibility);
+
+            const handleTodoLauncherVisibility = (visible: boolean) => {
+                setShowTodoLauncher(visible);
+            };
+            window.petAPI.on('todolauncher-visibility', handleTodoLauncherVisibility);
+
+            const handleReminderBadgeVisibility = (visible: boolean) => {
+                setShowReminderBadge(visible);
+            };
+            window.petAPI.on('reminder-badge-visibility', handleReminderBadgeVisibility);
+
+            return () => {
+                unsubscribe();
+                unsubscribeSkinSwitch();
+                window.petAPI.removeListener('set-pet-state', handleSetPetState);
+                window.petAPI.removeListener('set-locale', handleSetLocale);
+                window.petAPI.removeListener('pomodoro-visibility', handlePomodoroVisibility);
+                window.petAPI.removeListener('reminder-visibility', handleReminderVisibility);
+                window.petAPI.removeListener('todolauncher-visibility', handleTodoLauncherVisibility);
+                window.petAPI.removeListener('reminder-badge-visibility', handleReminderBadgeVisibility);
+            };
+        }
+
         return () => {
             unsubscribe();
             unsubscribeSkinSwitch();
@@ -247,10 +357,23 @@ function App(): JSX.Element {
     }, [stateMachine, loadSkinStates]);
 
     /**
-     * 处理语言切换
+     * 定时获取激活提醒数量，显示在图标徽标上
      */
-    const handleLocaleChange = useCallback((locale: Locale) => {
-        setLocale(locale);
+    useEffect(() => {
+        const fetchReminderCount = async () => {
+            if (!window.petAPI) return;
+            try {
+                const reminders = await window.petAPI.reminderGetAll();
+                const active = reminders.filter((r: any) => r.enabled).length;
+                setReminderCount(active);
+            } catch {
+                // 静默失败
+            }
+        };
+
+        fetchReminderCount();
+        const interval = setInterval(fetchReminderCount, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     /**
@@ -268,11 +391,7 @@ function App(): JSX.Element {
         if (!window.petAPI || !bubbleRef.current) return;
         try {
             const tasks = await window.petAPI.taskGetAll();
-            const today = new Date().toISOString().slice(0, 10);
-            // 过滤今日任务（我的一天 或 今天截止）
-            const todayTasks = tasks.filter((t: any) =>
-                t.inMyDay || (t.dueDate && t.dueDate === today)
-            );
+            const todayTasks = tasks.filter((t: any) => isInTodayView(t));
             const bubbleTasks = todayTasks.slice(0, 6).map((t: any) => ({
                 id: t.id,
                 title: t.title,
@@ -399,13 +518,6 @@ function App(): JSX.Element {
     }, [resizeState.current.isResizing]);
 
     /**
-     * 切换设置面板显示/隐藏
-     */
-    const toggleSettings = useCallback(() => {
-        setSettingsOpen(!settingsOpen);
-    }, [settingsOpen]);
-
-    /**
      * 调整窗口大小
      */
     const adjustWindowSize = useCallback((width: number, height: number) => {
@@ -415,35 +527,6 @@ function App(): JSX.Element {
         }
     }, []);
 
-    const handleQuit = useCallback(() => {
-        window.petAPI.quitApp();
-    }, []);
-
-    const handleStateChange = useCallback((state: PetState) => {
-        stateMachine.transition(state);
-    }, [stateMachine]);
-
-    const handleGroupChange = useCallback((groupId: string) => {
-        setCurrentGroup(groupId);
-        const group = SKIN_GROUPS.find(g => g.id === groupId);
-        if (group && group.skins.length > 0) {
-            setCurrentSkin(group.skins[0].id);
-        }
-    }, []);
-
-    const handleSkinChange = useCallback((skinId: string) => {
-        setCurrentSkin(skinId);
-        loadSkinStates(skinId);
-    }, [loadSkinStates]);
-
-    /**
-     * 打开任务管理窗口（独立窗口）
-     */
-    const handleOpenTodoWindow = useCallback(async () => {
-        setSettingsOpen(false);
-        await window.petAPI.openTodoWindow();
-    }, []);
-
     // 如果是 todo 路由，只渲染 TodoApp（独立窗口模式）
     if (currentRoute === 'todo') {
         return (
@@ -451,6 +534,24 @@ function App(): JSX.Element {
                 <ErrorBoundary>
                     <TodoApp />
                 </ErrorBoundary>
+            </div>
+        );
+    }
+
+    // 如果是 settings 路由，只渲染 SettingsApp（独立窗口模式）
+    if (currentRoute === 'settings') {
+        return (
+            <div className="settings-window-container">
+                <SettingsApp />
+            </div>
+        );
+    }
+
+    // 如果是 reminder 路由，只渲染 ReminderApp（独立窗口模式）
+    if (currentRoute === 'reminder') {
+        return (
+            <div className="reminder-window-container">
+                <ReminderApp />
             </div>
         );
     }
@@ -475,8 +576,39 @@ function App(): JSX.Element {
                         onMouseDown={(e) => handleResizeStart(e, 'se')}
                     />
                     
-                    <Pomodoro />
-                    <Reminder />
+                    {/* 右侧图标栏 */}
+                    <div className="icon-bar">
+                        <div className="icon-bar-item icon-always-visible" onContextMenu={e => e.preventDefault()}>
+                            <button
+                                className="settings-toggle"
+                                onClick={() => window.petAPI?.toggleSettingsWindow()}
+                                title={t('settings.title')}
+                            >
+                                ⚙
+                            </button>
+                        </div>
+                        <div className={`icon-bar-item ${showPomodoro ? 'icon-visible' : 'icon-hidden'}`} onContextMenu={e => e.preventDefault()}>
+                            <Pomodoro />
+                        </div>
+                        <div className={`icon-bar-item ${showReminder ? 'icon-visible' : 'icon-hidden'}`} onContextMenu={e => e.preventDefault()}>
+                            <div className="reminder-container-inner">
+                                <button
+                                    className="reminder-toggle"
+                                    onClick={() => window.petAPI?.toggleReminderWindow()}
+                                    title="提醒"
+                                >
+                                    🔔
+                                    {showReminderBadge && reminderCount > 0 && (
+                                        <span className="reminder-badge">{reminderCount}</span>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                        <div className={`icon-bar-item ${showTodoLauncher ? 'icon-visible' : 'icon-hidden'}`}>
+                            <TodoLauncher />
+                        </div>
+                    </div>
+
                     <Bubble ref={bubbleRef} />
                     
                     {/* 拖拽手柄 */}
@@ -486,108 +618,6 @@ function App(): JSX.Element {
                     >
                         ☰
                     </div>
-                    
-                    {/* 设置按钮 */}
-                    <button 
-                        className="settings-toggle"
-                        onClick={toggleSettings}
-                        title={t('settings.title')}
-                    >
-                        ⚙
-                    </button>
-                    
-                    {/* 设置侧边栏 */}
-                    {settingsOpen && (
-                        <div className="settings-sidebar">
-                            <div className="settings-header">
-                                <h3 className="settings-title">{t('settings.title')}</h3>
-                                <button className="close-btn" onClick={toggleSettings}>
-                                    ✕
-                                </button>
-                            </div>
-                            
-                            {/* 任务管理入口 - 放在设置面板最上方 */}
-                            <div className="settings-group settings-group-tasks">
-                                <div className="settings-group-label">📋 任务管理</div>
-                                <button
-                                    className="action-btn action-btn-tasks"
-                                    onClick={handleOpenTodoWindow}
-                                >
-                                    打开任务管理
-                                    <span className="task-count-badge">{taskCount > 0 ? taskCount : ''}</span>
-                                </button>
-                            </div>
-
-                            {/* 当前状态 */}
-                            <div className="settings-group">
-                                <div className="settings-group-label">{t('settings.title')}</div>
-                                <div className="current-state-display">
-                                    <div className="current-state-text">{stateLabels[currentState] || currentState}</div>
-                                </div>
-                                <div className="state-grid" style={{ marginTop: '12px' }}>
-                                    {supportedStates.map((state) => (
-                                        <button
-                                            key={state}
-                                            className={`state-item ${currentState === state ? 'active' : ''}`}
-                                            onClick={() => handleStateChange(state as PetState)}
-                                        >
-                                            {stateLabels[state] || state}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            {/* 语言选择 */}
-                            <div className="settings-group">
-                                <div className="settings-group-label">{t('settings.language')}</div>
-                                <select
-                                    value={currentLocale}
-                                    onChange={(e) => handleLocaleChange(e.target.value as Locale)}
-                                    className="settings-select"
-                                >
-                                    {getAvailableLocales().map((locale) => (
-                                        <option key={locale.value} value={locale.value}>
-                                            {locale.label}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            
-                            {/* 皮肤选择 */}
-                            <div className="settings-group">
-                                <div className="settings-group-label">{t('common.skin')}</div>
-                                <div className="dual-select">
-                                    <select
-                                        value={currentGroup}
-                                        onChange={(e) => handleGroupChange(e.target.value)}
-                                        className="settings-select"
-                                    >
-                                        {SKIN_GROUPS.map((group) => (
-                                            <option key={group.id} value={group.id}>
-                                                {group.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <select
-                                        value={currentSkin}
-                                        onChange={(e) => handleSkinChange(e.target.value)}
-                                        className="settings-select"
-                                    >
-                                        {currentSkins.map((skin) => (
-                                            <option key={skin.id} value={skin.id}>
-                                                {skin.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
-
-                            {/* 退出按钮 */}
-                            <button className="quit-btn" onClick={handleQuit}>
-                                {t('common.quit')}
-                            </button>
-                        </div>
-                    )}
                     
                     {/* 桌宠 */}
                     <div

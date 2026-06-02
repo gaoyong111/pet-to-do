@@ -48,7 +48,7 @@ export interface TodoTask {
   dueTime?: string; // HH:mm
   reminderId?: string;
   tags?: string[];
-  inMyDay: boolean; // 是否在"我的一天"中
+  inMyDay?: boolean; // [已废弃] 改为前端自动计算，见 isInTodayView()
   createdAt: string;
   updatedAt: string;
   completedAt?: string;

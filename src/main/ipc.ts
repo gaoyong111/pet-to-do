@@ -251,6 +251,11 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         return true;
     });
 
+    ipcMain.handle('task-set-all', (_event, tasks: TodoTask[]) => {
+        todoSystem.setAllTasks(tasks);
+        return true;
+    });
+
     ipcMain.handle('reminder-clear-all', () => {
         reminderSystem.clearAllReminders();
         return true;
@@ -258,7 +263,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     /**
      * 快速添加任务（桌宠侧入口）
-     * 自动放入"我的一天"，优先级 medium
      */
     ipcMain.handle('task-quick-add', (_event, title: string) => {
         const task = todoSystem.addTask({
@@ -266,8 +270,7 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
             title: title.trim(),
             status: 'todo',
             priority: 'medium',
-            isImportant: false,
-            inMyDay: true
+            isImportant: false
         });
         petEventBus.showBubble(`✅ 已添加：${title}`, 2500, 'emotion');
         return task;

@@ -1,18 +1,11 @@
 import React from 'react';
-import { TodoTask } from '../../../../shared/types';
 import { MainContentProps } from './types';
-import { QuickAdd } from './QuickAdd';
 import { EmptyState } from './EmptyState';
 import { TaskItem } from './TaskItem';
 
 export const MainContent = ({ 
   selectedList, 
   showCompleted, 
-  showQuickAdd, 
-  newTaskTitle, 
-  onToggleQuickAdd, 
-  onUpdateNewTaskTitle, 
-  onAddNewTask, 
   filteredTasks, 
   onToggleTaskStatus, 
   onToggleImportant, 
@@ -54,14 +47,6 @@ export const MainContent = ({
       </div>
 
       <div className="tasks-container">
-        <QuickAdd
-          showQuickAdd={showQuickAdd}
-          newTaskTitle={newTaskTitle}
-          onToggleQuickAdd={onToggleQuickAdd}
-          onUpdateNewTaskTitle={onUpdateNewTaskTitle}
-          onAddNewTask={onAddNewTask}
-        />
-
         {filteredTasks.length === 0 ? (
           <EmptyState selectedList={selectedList} />
         ) : (

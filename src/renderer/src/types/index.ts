@@ -194,6 +194,7 @@ export interface PetAPI {
     reminderToggle: (id: string) => Promise<boolean>;
     // 任务相关方法
     taskGetAll: (filters?: any) => Promise<any[]>;
+    taskSetAll: (tasks: any[]) => Promise<boolean>;
     taskGet: (id: string) => Promise<any>;
     taskAdd: (task: any) => Promise<any>;
     taskUpdate: (id: string, updates: any) => Promise<any>;
@@ -212,6 +213,14 @@ export interface PetAPI {
     reminderSnooze: (reminderId: string, minutes: number) => Promise<boolean>;
     // 打开任务管理窗口（独立窗口）
     openTodoWindow: () => Promise<boolean>;
+    toggleTodoWindow: () => Promise<boolean>;
+    openSettingsWindow: () => Promise<boolean>;
+    toggleSettingsWindow: () => Promise<boolean>;
+    openReminderWindow: () => Promise<boolean>;
+    toggleReminderWindow: () => Promise<boolean>;
+    relayToMain: (channel: string, ...args: any[]) => Promise<boolean>;
+    on: (channel: string, callback: (...args: any[]) => void) => void;
+    removeListener: (channel: string, callback: (...args: any[]) => void) => void;
     // Microsoft To Do 同步
     msTodoStatus: () => Promise<{ authorized: boolean; configured: boolean }>;
     msTodoAuthorize: (clientId?: string) => Promise<{ success: boolean; error?: string; deviceCode?: string; verificationUri?: string }>;

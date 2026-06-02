@@ -14,11 +14,31 @@ let mainWindow: BrowserWindow | null = null;
 /** Todo窗口实例 */
 let todoWindow: BrowserWindow | null = null;
 
+/** 设置窗口实例 */
+let settingsWindow: BrowserWindow | null = null;
+
+/** 提醒窗口实例 */
+let reminderWindow: BrowserWindow | null = null;
+
 /**
  * 获取Todo窗口实例（供IPC使用）
  */
 export function getTodoWindow(): BrowserWindow | null {
     return todoWindow;
+}
+
+/**
+ * 获取设置窗口实例（供IPC使用）
+ */
+export function getSettingsWindow(): BrowserWindow | null {
+    return settingsWindow;
+}
+
+/**
+ * 获取提醒窗口实例（供IPC使用）
+ */
+export function getReminderWindow(): BrowserWindow | null {
+    return reminderWindow;
 }
 
 /** 正在退出标志，防止重复退出 */
@@ -71,6 +91,82 @@ function createTodoWindow(): void {
 }
 
 /**
+ * 创建设置窗口
+ */
+function createSettingsWindow(): void {
+    if (settingsWindow) {
+        if (settingsWindow.isMinimized()) settingsWindow.restore();
+        settingsWindow.focus();
+        return;
+    }
+
+    settingsWindow = new BrowserWindow({
+        width: 450,
+        height: 600,
+        title: '设置',
+        frame: true,
+        resizable: true,
+        alwaysOnTop: false,
+        skipTaskbar: false,
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            contextIsolation: true,
+            nodeIntegration: false
+        }
+    });
+
+    if (process.env.ELECTRON_RENDERER_URL) {
+        settingsWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}#settings`);
+    } else {
+        settingsWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+            hash: '#settings'
+        });
+    }
+
+    settingsWindow.on('closed', () => {
+        settingsWindow = null;
+    });
+}
+
+/**
+ * 创建提醒窗口
+ */
+function createReminderWindow(): void {
+    if (reminderWindow) {
+        if (reminderWindow.isMinimized()) reminderWindow.restore();
+        reminderWindow.focus();
+        return;
+    }
+
+    reminderWindow = new BrowserWindow({
+        width: 450,
+        height: 600,
+        title: '提醒',
+        frame: true,
+        resizable: true,
+        alwaysOnTop: false,
+        skipTaskbar: false,
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            contextIsolation: true,
+            nodeIntegration: false
+        }
+    });
+
+    if (process.env.ELECTRON_RENDERER_URL) {
+        reminderWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}#reminder`);
+    } else {
+        reminderWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+            hash: '#reminder'
+        });
+    }
+
+    reminderWindow.on('closed', () => {
+        reminderWindow = null;
+    });
+}
+
+/**
  * 创建桌宠主窗口
  * 设置透明、无边框、置顶等属性
  */
@@ -113,6 +209,59 @@ function createMainWindow(): void {
         return true;
     });
 
+    // 注册切换Todo窗口的IPC处理器（开→关、关→开）
+    ipcMain.handle('toggle-todo-window', () => {
+        if (todoWindow && !todoWindow.isDestroyed()) {
+            todoWindow.close();
+            todoWindow = null;
+        } else {
+            createTodoWindow();
+        }
+        return true;
+    });
+
+    // 注册打开设置窗口的IPC处理器
+    ipcMain.handle('open-settings-window', () => {
+        createSettingsWindow();
+        return true;
+    });
+
+    // 注册切换设置窗口的IPC处理器
+    ipcMain.handle('toggle-settings-window', () => {
+        if (settingsWindow && !settingsWindow.isDestroyed()) {
+            settingsWindow.close();
+            settingsWindow = null;
+        } else {
+            createSettingsWindow();
+        }
+        return true;
+    });
+
+    // 注册打开提醒窗口的IPC处理器
+    ipcMain.handle('open-reminder-window', () => {
+        createReminderWindow();
+        return true;
+    });
+
+    // 注册切换提醒窗口的IPC处理器
+    ipcMain.handle('toggle-reminder-window', () => {
+        if (reminderWindow && !reminderWindow.isDestroyed()) {
+            reminderWindow.close();
+            reminderWindow = null;
+        } else {
+            createReminderWindow();
+        }
+        return true;
+    });
+
+    // 注册中转IPC：设置/提醒窗口发消息给主窗口
+    ipcMain.handle('relay-to-main', (_event, channel: string, ...args: any[]) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send(channel, ...args);
+        }
+        return true;
+    });
+
     // 加载皮肤
     const skinsDir = join(__dirname, '../renderer/skins');
     const skinLoader = createSkinLoader(skinsDir);
@@ -133,8 +282,7 @@ function createMainWindow(): void {
     contextMenu.append(new MenuItem({
       label: '设置',
       click: () => {
-        // 将来实现设置窗口
-        console.log('打开设置');
+        createSettingsWindow();
       }
     }));
     

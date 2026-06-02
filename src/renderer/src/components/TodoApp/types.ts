@@ -24,6 +24,7 @@ export interface SidebarProps {
   onClose?: () => void;
   showCompleted: boolean;
   onToggleShowCompleted: () => void;
+  onAddTask: (title: string) => void;
 }
 
 export interface QuickAddProps {
@@ -41,11 +42,6 @@ export interface EmptyStateProps {
 export interface MainContentProps {
   selectedList: TodoList | undefined;
   showCompleted: boolean;
-  showQuickAdd: boolean;
-  newTaskTitle: string;
-  onToggleQuickAdd: () => void;
-  onUpdateNewTaskTitle: (value: string) => void;
-  onAddNewTask: () => void;
   filteredTasks: TodoTask[];
   onToggleTaskStatus: (taskId: string) => void;
   onToggleImportant: (taskId: string, e: React.MouseEvent) => void;

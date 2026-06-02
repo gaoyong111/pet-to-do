@@ -52,7 +52,7 @@ interface TodoState {
   saveEditTask: () => void;
   cancelEditTask: () => void;
   updateEditingTask: <K extends keyof TodoTask>(field: K, value: TodoTask[K]) => void;
-  addNewTask: () => void;
+  addNewTask: (title: string) => void;
   
   // 存储操作
   loadFromLocalStorage: () => void;
@@ -291,31 +291,20 @@ export const useTodoStore = create<TodoState>((set, get) => ({
     }));
   },
   
-  addNewTask: () => {
-    const { newTaskTitle, selectedListId, defaultMsListId, lists } = get();
-    if (!newTaskTitle.trim()) return;
+  addNewTask: (title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
 
-    // 所有新添加的任务都需要同步到 MS
-    const needMsSync = true;
+    const { defaultMsListId, lists } = get();
 
-    // 找到实际的列表 ID
-    let listIdForNewTask: string;
-    if (selectedListId === SPECIAL_LIST_IDS.MY_DAY ||
-        selectedListId === SPECIAL_LIST_IDS.IMPORTANT ||
-        selectedListId === SPECIAL_LIST_IDS.PLANNED) {
-      listIdForNewTask = SPECIAL_LIST_IDS.TASKS;
-    } else {
-      listIdForNewTask = selectedListId;
-    }
-
+    // 始终创建普通任务（不受当前选中列表影响）
     const newTask: Omit<TodoTask, 'id' | 'createdAt' | 'updatedAt'> = {
-      listId: listIdForNewTask,
-      title: newTaskTitle.trim(),
+      listId: SPECIAL_LIST_IDS.TASKS,
+      title: trimmed,
       status: 'todo',
       priority: 'medium',
-      isImportant: selectedListId === SPECIAL_LIST_IDS.IMPORTANT,
-      inMyDay: selectedListId === SPECIAL_LIST_IDS.MY_DAY,
-      source: 'local'  // 标记为本地创建的任务
+      isImportant: false,
+      source: 'local'
     };
 
     // 获取 MS 列表 ID（去掉 ms- 前缀）
@@ -338,9 +327,9 @@ export const useTodoStore = create<TodoState>((set, get) => ({
           showQuickAdd: false
         }));
         
-        // 同步到 MS To Do（如果是"我的一天"或"重要"）
+        // 同步到 MS To Do
         const msListId = getMsListId();
-        if (needMsSync && msListId && window.petAPI?.msTodoPush) {
+        if (msListId && window.petAPI?.msTodoPush) {
           window.petAPI.msTodoPush(created, msListId).then(result => {
             if (result.success && result.microsoftToDoId) {
               // 更新本地任务，保存 MS ID

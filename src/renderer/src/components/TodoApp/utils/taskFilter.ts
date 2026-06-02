@@ -1,6 +1,27 @@
 import { TodoTask } from '../../../../../shared/types';
 import { SPECIAL_LIST_IDS } from '../constants';
 
+/**
+ * 判断任务是否属于"今日待办"（纯本地自动计算）
+ * 规则：未完成 且（创建/更新于今天 或 截止日期 >= 今天）
+ */
+export function isInTodayView(task: TodoTask): boolean {
+  if (task.status === 'completed') return false;
+
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+  // 创建日期是今天
+  if (task.createdAt?.startsWith(today)) return true;
+
+  // 更新日期是今天
+  if (task.updatedAt?.startsWith(today)) return true;
+
+  // 截止日期 >= 今天（含未来和今天）
+  if (task.dueDate && task.dueDate >= today) return true;
+
+  return false;
+}
+
 export function filterTasksByList(
   tasks: TodoTask[],
   selectedListId: string,
@@ -12,7 +33,7 @@ export function filterTasksByList(
     
     switch (selectedListId) {
       case SPECIAL_LIST_IDS.MY_DAY:
-        listMatch = task.inMyDay;
+        listMatch = isInTodayView(task);
         break;
       case SPECIAL_LIST_IDS.IMPORTANT:
         listMatch = task.isImportant;
@@ -59,7 +80,7 @@ export function getTaskCountForList(
     
     switch (listId) {
       case SPECIAL_LIST_IDS.MY_DAY:
-        return t.inMyDay;
+        return isInTodayView(t);
       case SPECIAL_LIST_IDS.IMPORTANT:
         return t.isImportant;
       case SPECIAL_LIST_IDS.PLANNED:

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SidebarProps } from './types';
 import { useTodoStore } from './store/useTodoStore';
+import { mergeMsTasks } from './utils/msSync';
 
 export const Sidebar = ({ 
   lists, 
@@ -9,7 +10,8 @@ export const Sidebar = ({
   getTaskCount,
   onClose,
   showCompleted,
-  onToggleShowCompleted
+  onToggleShowCompleted,
+  onAddTask
 }: SidebarProps) => {
   const [msStatus, setMsStatus] = useState<{ authorized: boolean; configured: boolean } | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -17,6 +19,10 @@ export const Sidebar = ({
   const [showClientIdInput, setShowClientIdInput] = useState(false);
   const [clientId, setClientId] = useState('');
   const [deviceCodeInfo, setDeviceCodeInfo] = useState<{ userCode: string; deviceCode: string; verificationUri: string } | null>(null);
+
+  // 添加任务输入框状态
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [addTaskTitle, setAddTaskTitle] = useState('');
 
   // 组件挂载时检查 MS 状态并自动同步
   useEffect(() => {
@@ -38,7 +44,11 @@ export const Sidebar = ({
             const count = result.tasks?.length || 0;
             setSyncMsg(`同步成功，拉取 ${count} 条任务 ✅`);
             if (result.tasks && result.tasks.length > 0) {
-              useTodoStore.getState().setTasks(result.tasks);
+              // 合并 MS 任务与本地任务，保护本地状态（如 isImportant）
+              const mergedTasks = mergeMsTasks(useTodoStore.getState().tasks, result.tasks);
+              useTodoStore.getState().setTasks(mergedTasks);
+              // 持久化到主进程
+              window.petAPI?.taskSetAll?.(mergedTasks);
             }
             if (result.lists && result.lists.length > 0) {
               useTodoStore.getState().setLists(result.lists);
@@ -164,13 +174,14 @@ export const Sidebar = ({
       const count = result.tasks?.length || 0;
       setSyncMsg(`同步成功，拉取 ${count} 条任务 ✅`);
       
-      // 3. 合并任务：保留本地任务，添加 MS 任务
+      // 3. 合并任务：保留本地 isImportant 等标志，不被 MS 数据覆盖
       if (result.tasks && result.tasks.length > 0) {
-        // 从 MS 拉取的任务
         const msTasks = result.tasks;
         
-        // 合并到 store 显示
-        useTodoStore.getState().setTasks(msTasks);
+        // 合并：MS 任务与本地任务按 microsoftToDoId 匹配合并，保护本地 isImportant 等状态
+        const mergedTasks = mergeMsTasks(useTodoStore.getState().tasks, msTasks);
+        useTodoStore.getState().setTasks(mergedTasks);
+        window.petAPI?.taskSetAll?.(mergedTasks);
         
         // 为有到期日期的任务创建提醒（仅当天）
         const today = new Date().toISOString().split('T')[0];
@@ -237,7 +248,7 @@ export const Sidebar = ({
 
   // MS To Do 特殊列表（硬编码）
   const specialLists = [
-    { id: 'my-day', name: '我的一天', icon: '☀️', isMyDay: true },
+    { id: 'my-day', name: '今日待办', icon: '📅', isMyDay: true },
     { id: 'important', name: '重要', icon: '⭐', isMyDay: false },
     { id: 'all', name: '所有任务', icon: '📋', isMyDay: false },
     { id: 'completed-list', name: '已完成', icon: '✓', isMyDay: false },
@@ -247,12 +258,66 @@ export const Sidebar = ({
     <div className="sidebar">
       <div className="sidebar-header">
         <h2>任务</h2>
+        <button
+          className="sidebar-add-btn"
+          onClick={() => setShowAddInput(!showAddInput)}
+          title="添加任务"
+        >
+          +
+        </button>
         {onClose && (
           <button className="sidebar-close-btn" onClick={onClose} title="关闭">
             ✕
           </button>
         )}
       </div>
+      
+      {/* 添加任务输入区 */}
+      {showAddInput && (
+        <div className="sidebar-add-task">
+          <input
+            type="text"
+            className="sidebar-add-input"
+            value={addTaskTitle}
+            onChange={e => setAddTaskTitle(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                onAddTask(addTaskTitle);
+                setAddTaskTitle('');
+                setShowAddInput(false);
+              }
+              if (e.key === 'Escape') {
+                setAddTaskTitle('');
+                setShowAddInput(false);
+              }
+            }}
+            placeholder="输入任务标题..."
+            autoFocus
+          />
+          <div className="sidebar-add-actions">
+            <button
+              className="btn-secondary btn-sm"
+              onClick={() => {
+                setAddTaskTitle('');
+                setShowAddInput(false);
+              }}
+            >
+              取消
+            </button>
+            <button
+              className="btn-primary btn-sm"
+              onClick={() => {
+                onAddTask(addTaskTitle);
+                setAddTaskTitle('');
+                setShowAddInput(false);
+              }}
+              disabled={!addTaskTitle.trim()}
+            >
+              添加
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* 特殊列表 */}
       {specialLists.map(list => (

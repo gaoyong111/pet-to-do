@@ -1,11 +1,35 @@
+.reminder-window {
+    padding: 24px 20px;
+    max-width: 420px;
+    margin: 0 auto;
+    background: #f9fafb;
+    min-height: 100vh;
+    overflow-y: auto;
+}
+
+.reminder-window-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #1f2937;
+    margin: 0 0 20px 0;
+}
+
+.reminder-window-panel {
+    background: white;
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
 .reminder-container {
-  position: absolute;
-  top: 60px;
-  right: 10px;
-  z-index: 99;
+    position: absolute;
+    top: 105px;
+    right: 10px;
+    z-index: 99;
 }
 
 .reminder-toggle {
+  position: relative;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -271,4 +295,32 @@
 
 .delete-btn:hover {
   background: rgba(244, 67, 54, 0.1) !important;
+}
+
+/* 徽标开关 */
+.reminder-badge-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: #f8f9fb;
+  border-radius: 8px;
+  border: 1px solid #e8eaf0;
+  font-size: 13px;
+  color: #444860;
+  cursor: pointer;
+  user-select: none;
+}
+
+.reminder-badge-toggle span {
+  font-size: 13px;
+  color: #444860;
+}
+
+.reminder-badge-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #9C27B0;
 }

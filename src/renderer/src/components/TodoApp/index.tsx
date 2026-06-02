@@ -21,8 +21,6 @@ function TodoApp({ onClose }: TodoAppProps) {
     lists,
     tasks,
     selectedListId,
-    showQuickAdd,
-    newTaskTitle,
     editingTaskId,
     editingTask,
     showCompleted,
@@ -31,8 +29,6 @@ function TodoApp({ onClose }: TodoAppProps) {
     selectedTaskId,
     searchQuery,
     setSelectedListId,
-    setShowQuickAdd,
-    setNewTaskTitle,
     toggleTaskStatus,
     toggleImportant,
     deleteTask,
@@ -68,7 +64,7 @@ function TodoApp({ onClose }: TodoAppProps) {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [saveToLocalStorage, lists, selectedListId, showQuickAdd, newTaskTitle, editingTaskId, editingTask, showCompleted, showDeleteConfirm]);
+  }, [saveToLocalStorage, lists, selectedListId, editingTaskId, editingTask, showCompleted, showDeleteConfirm]);
 
   // 获取当前选中的任务
   const currentTask = tasks.find(task => task.id === selectedTaskId) || null;
@@ -128,15 +124,11 @@ function TodoApp({ onClose }: TodoAppProps) {
         getTaskCount={getTaskCount}
         showCompleted={showCompleted}
         onToggleShowCompleted={handleToggleShowCompleted}
+        onAddTask={(title) => addNewTask(title)}
       />
       <MainContent
         selectedList={selectedList}
         showCompleted={showCompleted}
-        showQuickAdd={showQuickAdd}
-        newTaskTitle={newTaskTitle}
-        onToggleQuickAdd={() => setShowQuickAdd(!showQuickAdd)}
-        onUpdateNewTaskTitle={setNewTaskTitle}
-        onAddNewTask={addNewTask}
         filteredTasks={filteredTasks}
         onToggleTaskStatus={toggleTaskStatus}
         onToggleImportant={handleToggleImportant}

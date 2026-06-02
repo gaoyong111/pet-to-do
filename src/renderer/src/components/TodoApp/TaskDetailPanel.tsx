@@ -125,15 +125,6 @@ export const TaskDetailPanel = ({
             </label>
           </div>
 
-          <div className="form-group">
-            <label className="toggle-switch" onClick={() => onUpdateTask('inMyDay', !task.inMyDay)}>
-              <div className={`toggle-switch-track ${task.inMyDay ? 'active' : ''}`}>
-                <div className="toggle-switch-thumb" />
-              </div>
-              <span className="toggle-switch-label">添加到"我的一天" ☀️</span>
-            </label>
-          </div>
-
           {/* 提醒设置（仅在设置了截止日期时显示） */}
           {task.dueDate && (
             <div className="form-group" style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid rgba(229, 231, 235, 0.6)' }}>

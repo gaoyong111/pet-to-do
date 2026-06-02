@@ -87,10 +87,76 @@ html, body, #root {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
 }
 
-.settings-toggle {
+/* ====== 右侧图标栏 ====== */
+.icon-bar {
     position: absolute;
     top: 12px;
-    right: 12px;
+    right: 10px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    -webkit-app-region: no-drag;
+}
+
+.icon-bar-item {
+    transition: opacity 0.3s ease,
+                max-height 0.3s ease,
+                margin 0.3s ease,
+                transform 0.3s ease;
+}
+
+.icon-bar-item.icon-visible {
+    opacity: 1;
+    max-height: 60px;
+    margin: 0;
+    transform: translateY(0) scale(1);
+}
+
+.icon-bar-item.icon-hidden {
+    opacity: 0;
+    max-height: 0;
+    margin: 0;
+    overflow: hidden;
+    transform: translateY(-6px) scale(0.85);
+    pointer-events: none;
+}
+
+.icon-bar-item.icon-always-visible {
+    opacity: 1;
+    max-height: 60px;
+    margin: 0;
+}
+
+/* 提醒按钮内联容器（替代原 reminder-container 的绝对定位） */
+.reminder-container-inner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 提醒数量徽标 */
+.reminder-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 9px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 2;
+}
+
+.settings-toggle {
     width: 36px;
     height: 36px;
     border: none;
@@ -101,7 +167,6 @@ html, body, #root {
     cursor: pointer;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     transition: all 0.2s ease;
-    z-index: 100;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -188,100 +253,6 @@ html, body, #root {
     color: #1f2937;
 }
 
-/* 设置组 */
-.settings-group {
-    margin-bottom: 24px;
-}
-
-.settings-group-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: #9ca3af;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: 12px;
-}
-
-/* 当前状态 */
-.current-state-display {
-    background: #f9fafb;
-    border-radius: 12px;
-    padding: 16px;
-    text-align: center;
-    border: 1px solid #e5e7eb;
-}
-
-.current-state-text {
-    font-size: 15px;
-    font-weight: 600;
-    color: #1f2937;
-}
-
-/* 状态按钮网格 */
-.state-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-}
-
-.state-item {
-    padding: 10px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    background: #ffffff;
-    color: #374151;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    text-align: center;
-}
-
-.state-item:hover {
-    background: #f9fafb;
-    border-color: #d1d5db;
-}
-
-.state-item.active {
-    background: #1f2937;
-    color: #ffffff;
-    border-color: #1f2937;
-}
-
-/* 设置控件 */
-.settings-select {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    background: #ffffff;
-    color: #1f2937;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-
-.settings-select:hover {
-    border-color: #d1d5db;
-}
-
-.settings-select:focus {
-    outline: none;
-    border-color: #1f2937;
-    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.05);
-}
-
-/* 双选择器 */
-.dual-select {
-    display: flex;
-    gap: 8px;
-}
-
-.dual-select .settings-select {
-    flex: 1;
-}
-
 /* 双输入框 */
 .dual-input {
     display: flex;
@@ -340,25 +311,6 @@ html, body, #root {
 
 .settings-slider::-moz-range-thumb:hover {
     transform: scale(1.2);
-}
-
-/* 退出按钮 */
-.quit-btn {
-    width: 100%;
-    padding: 12px;
-    border: none;
-    border-radius: 10px;
-    background: #fee2e2;
-    color: #991b1b;
-    font-size: 14px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.15s ease;
-    margin-top: 8px;
-}
-
-.quit-btn:hover {
-    background: #fecaca;
 }
 
 /* ===================== 右键快速添加任务浮层 ===================== */
@@ -486,25 +438,31 @@ html, body, #root {
     text-align: center;
 }
 
-/* 任务管理组 - 放在设置面板最上方 */
-.settings-group-tasks {
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
-    border-radius: 14px;
-    padding: 16px;
-    margin-bottom: 20px;
-    border: 1px solid rgba(99, 102, 241, 0.1);
-}
-.settings-group-tasks .settings-group-label {
-    color: #6366f1;
-    font-size: 12px;
-    margin-bottom: 10px;
-}
-
 /* ====== Todo 独立窗口容器 ====== */
 .todo-window-container {
     width: 100vw;
     height: 100vh;
     overflow: hidden;
+    background: #f9fafb;
+    position: relative;
+    z-index: 1;
+}
+
+/* ====== Settings 独立窗口容器 ====== */
+.settings-window-container {
+    width: 100vw;
+    height: 100vh;
+    overflow-y: auto;
+    background: #eceef3;
+    position: relative;
+    z-index: 1;
+}
+
+/* ====== Reminder 独立窗口容器 ====== */
+.reminder-window-container {
+    width: 100vw;
+    height: 100vh;
+    overflow-y: auto;
     background: #f9fafb;
     position: relative;
     z-index: 1;
