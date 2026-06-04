@@ -298,6 +298,14 @@ contextBridge.exposeInMainWorld('petAPI', {
       return ipcRenderer.invoke('toggle-reminder-window');
     },
 
+    openChatHistoryWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('open-chat-history-window');
+    },
+
+    toggleChatHistoryWindow: (): Promise<boolean> => {
+      return ipcRenderer.invoke('toggle-chat-history-window');
+    },
+
     /**
      * 中转消息到主窗口
      */
@@ -423,5 +431,34 @@ contextBridge.exposeInMainWorld('petAPI', {
      */
     removeListener: (channel: string, callback: (...args: any[]) => void): void => {
         ipcRenderer.removeListener(channel, callback);
-    }
+    },
+
+    // === Claude CLI 对话 ===
+    claudeChat: (prompt: string, cliPath: string, onChunk?: (text: string) => void): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            let settled = false;
+            const cleanup = () => {
+                clearTimeout(timer);
+                ipcRenderer.removeListener('claude-chat-chunk', chunkHandler);
+                ipcRenderer.removeListener('claude-chat-done', doneHandler);
+                ipcRenderer.removeListener('claude-chat-error', errorHandler);
+            };
+            const timer = setTimeout(() => {
+                if (!settled) { settled = true; cleanup(); reject(new Error('Claude CLI 无响应（35秒超时），请确认已重启应用')); }
+            }, 35000);
+            const chunkHandler = (_event: Electron.IpcRendererEvent, text: string) => {
+                onChunk?.(text);
+            };
+            const doneHandler = (_event: Electron.IpcRendererEvent, text: string) => {
+                if (!settled) { settled = true; cleanup(); resolve(text); }
+            };
+            const errorHandler = (_event: Electron.IpcRendererEvent, msg: string) => {
+                if (!settled) { settled = true; cleanup(); reject(new Error(msg)); }
+            };
+            if (onChunk) ipcRenderer.on('claude-chat-chunk', chunkHandler);
+            ipcRenderer.once('claude-chat-done', doneHandler);
+            ipcRenderer.once('claude-chat-error', errorHandler);
+            ipcRenderer.send('claude-chat', prompt, cliPath || 'claude');
+        });
+    },
   });

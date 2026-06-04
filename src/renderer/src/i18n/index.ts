@@ -108,6 +108,7 @@ export function t(path: string, params?: Record<string, string | number>): strin
 
 /**
  * 获取随机对话
+ * 如果指定的 category 不存在，fallback 到 'idle'
  */
 export function getRandomDialogue(category: string): string {
     const dialogues = locales[currentLocale].dialogue as any;
@@ -118,6 +119,11 @@ export function getRandomDialogue(category: string): string {
         if (value && typeof value === 'object' && key in value) {
             value = value[key];
         } else {
+            // fallback 到 idle
+            const fallback = (dialogues as any)?.idle;
+            if (Array.isArray(fallback) && fallback.length > 0) {
+                return fallback[Math.floor(Math.random() * fallback.length)];
+            }
             return '';
         }
     }

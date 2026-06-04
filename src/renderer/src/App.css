@@ -313,90 +313,6 @@ html, body, #root {
     transform: scale(1.2);
 }
 
-/* ===================== 右键快速添加任务浮层 ===================== */
-.context-quick-add {
-    position: absolute;
-    bottom: 60px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 100;
-    background: rgba(255, 255, 255, 0.97);
-    border: 1px solid rgba(60, 185, 100, 0.3);
-    border-radius: 14px;
-    padding: 10px 12px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
-    min-width: 240px;
-    animation: quickAddAppear 0.18s ease-out;
-}
-
-@keyframes quickAddAppear {
-    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-}
-
-.context-quick-label {
-    font-size: 12px;
-    color: #2a7a44;
-    font-weight: 600;
-    margin-bottom: 7px;
-    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-}
-
-.context-quick-row {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-}
-
-.context-quick-input {
-    flex: 1;
-    padding: 6px 10px;
-    font-size: 13px;
-    border: 1.5px solid rgba(60, 185, 100, 0.35);
-    border-radius: 9px;
-    outline: none;
-    background: rgba(240, 255, 245, 0.8);
-    color: #222;
-    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    transition: border 0.15s, box-shadow 0.15s;
-}
-.context-quick-input:focus {
-    border-color: #3CBB64;
-    box-shadow: 0 0 0 2.5px rgba(60, 185, 100, 0.18);
-    background: rgba(255,255,255,0.95);
-}
-
-.context-quick-submit {
-    padding: 6px 12px;
-    background: #3CBB64;
-    color: white;
-    border: none;
-    border-radius: 9px;
-    font-size: 13px;
-    cursor: pointer;
-    white-space: nowrap;
-    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-    transition: background 0.15s;
-}
-.context-quick-submit:hover { background: #2da354; }
-
-.context-quick-cancel {
-    width: 26px;
-    height: 26px;
-    border: none;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.07);
-    color: #666;
-    font-size: 11px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.15s;
-    padding: 0;
-    flex-shrink: 0;
-}
-.context-quick-cancel:hover { background: rgba(0,0,0,0.14); color: #333; }
 
 
 /* ====== 设置面板 - 操作按钮 ====== */
@@ -464,6 +380,16 @@ html, body, #root {
     height: 100vh;
     overflow-y: auto;
     background: #f9fafb;
+    position: relative;
+    z-index: 1;
+}
+
+/* 对话历史独立窗口容器 */
+.chathistory-window-container {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #fff;
     position: relative;
     z-index: 1;
 }

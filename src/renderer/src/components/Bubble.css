@@ -22,11 +22,15 @@
   border-radius: 16px;
   padding: 10px 14px 12px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
-  max-width: 230px;
+  width: fit-content;
   min-width: 120px;
   word-wrap: break-word;
   position: relative;
   border: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
   animation: bubbleFloat 3s ease-in-out infinite;
 }
 
@@ -68,7 +72,14 @@
   color: #333;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   white-space: pre-wrap;
-  padding-right: 14px; /* 避免被关闭按钮遮住 */
+  text-align: center;
+  max-height: 100px;
+  overflow-y: auto;
+  scrollbar-width: none;          /* Firefox */
+}
+.bubble-text::-webkit-scrollbar { /* Chrome/Safari */
+  width: 0;
+  background: transparent;
 }
 
 /* ===================== 气泡尾巴 ===================== */
@@ -119,7 +130,6 @@
 .bubble-todo {
   background: rgba(225, 248, 235, 0.98);
   border-color: rgba(60, 185, 100, 0.25);
-  max-width: 260px;
 }
 .bubble-todo .bubble-tail { border-top-color: rgba(225, 248, 235, 0.98); }
 .bubble-todo .bubble-text {
@@ -301,4 +311,20 @@
 .bubble:not(:has(.bubble-actions)):not(:has(.bubble-task-list)):active {
   transform: translateY(0);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* ===================== 流式打字光标 ===================== */
+.stream-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: #555;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  animation: blink 0.8s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }

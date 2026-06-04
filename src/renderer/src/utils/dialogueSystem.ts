@@ -1,6 +1,8 @@
 /**
  * 对话系统
  * 管理桌宠的对话、气泡显示和健康提醒
+ * 
+ * 注：状态机功能已暂时关闭，所有自动对话使用通用 idle 短语池
  */
 import { getRandomDialogue, getGreeting } from '../i18n';
 import { PetState } from '../types';
@@ -77,11 +79,10 @@ class DialogueManager {
     }
 
     /**
-     * 显示状态相关对话
+     * 显示状态相关对话（状态机关闭，统一用 idle 短语池）
      */
-    showStateDialogue(state?: PetState): void {
-        const targetState = state || this.currentState;
-        const dialogue = getRandomDialogue(targetState);
+    showStateDialogue(_state?: PetState): void {
+        const dialogue = getRandomDialogue('idle');
         if (dialogue) {
             this.showBubble(dialogue, 'emotion', 4000);
         }

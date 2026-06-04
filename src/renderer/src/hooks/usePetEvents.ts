@@ -8,7 +8,10 @@ import { StateMachine } from '../state/stateMachine';
  *
  * 事件流：主进程事件总线 → IPC → preload → 此 hook → 状态机
  */
-function usePetEvents(stateMachine: StateMachine): void {
+function usePetEvents(
+    stateMachine: StateMachine,
+    onReaction?: (reaction: string) => void
+): void {
     /**
      * 监听状态变化事件
      */
@@ -16,10 +19,7 @@ function usePetEvents(stateMachine: StateMachine): void {
         if (!window.petAPI) return;
 
         const unsub = window.petAPI.onStateChange((newState: string) => {
-            const validStates: PetState[] = ['idle', 'working', 'happy', 'sad', 'sleeping'];
-            if (validStates.includes(newState as PetState)) {
-                stateMachine.transition(newState as PetState);
-            }
+            stateMachine.transition(newState);
         });
 
         return unsub;
@@ -43,17 +43,18 @@ function usePetEvents(stateMachine: StateMachine): void {
 
     /**
      * 监听交互反应事件
-     * 目前仅打印日志，后续可扩展为播放独立动画
+     * 将 IPC 反应事件传递给外部处理器（如 Live2DSkinSetter）
      */
     useEffect(() => {
         if (!window.petAPI) return;
 
         const unsub = window.petAPI.onPlayReaction((reaction: string) => {
             console.log(`[Pet] Reaction: ${reaction}`);
+            onReaction?.(reaction);
         });
 
         return unsub;
-    }, []);
+    }, [onReaction]);
 }
 
 export default usePetEvents;

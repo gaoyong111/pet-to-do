@@ -1,141 +1,180 @@
 import { SkinSetter } from './SkinSetter';
-import * as PIXI from 'pixi.js';
 import { Live2DModel } from 'pixi-live2d-display/cubism4';
 
 /**
  * Live2D皮肤设置器
- * 专门用于处理Live2D模型的皮肤设置
+ * 负责模型动作/表情播放 + 物理演算
  */
 export class Live2DSkinSetter extends SkinSetter {
     private skinFolder: string = '';
     private model: Live2DModel | null = null;
     private manifest: any = null;
     private supportedStates: string[] = [];
+    private _physicsData: any = null;
 
     /**
-     * 初始化皮肤设置
-     * @param skinFolder 皮肤文件夹路径
+     * 初始化：加载 manifest + 预加载 physics3.json
      */
     async init(skinFolder: string): Promise<void> {
         this.skinFolder = skinFolder;
-        
-        // 加载manifest配置
+
         try {
             const manifestPath = `/skins/${skinFolder}/manifest.json`;
             const response = await fetch(manifestPath);
             this.manifest = await response.json();
-            
-            // 获取支持的状态列表
             this.supportedStates = this.manifest.supportedStates || ['idle', 'happy', 'sad', 'angry'];
         } catch (error) {
-            console.error('加载manifest失败:', error);
+            console.error('[Live2D] Failed to load manifest:', error);
             this.supportedStates = ['idle'];
+        }
+
+        // 预加载 physics3.json
+        await this._preloadPhysics();
+    }
+
+    /**
+     * 预加载物理演算数据
+     */
+    private async _preloadPhysics(): Promise<void> {
+        if (!this.manifest?.model?.entry) return;
+        try {
+            const modelJsonPath = `/skins/${this.skinFolder}/${this.manifest.model.entry}`;
+            const resp = await fetch(modelJsonPath);
+            const modelJson = await resp.json();
+            const physicsFile = modelJson?.FileReferences?.Physics;
+            if (!physicsFile) return;
+
+            const physicsResp = await fetch(`/skins/${this.skinFolder}/model/${physicsFile}`);
+            this._physicsData = await physicsResp.json();
+        } catch {
+            // physics 是可选的
         }
     }
 
     /**
-     * 设置Live2D模型实例
-     * @param model Live2D模型实例
+     * 绑定 Live2DModel 并启用物理演算
      */
     setModel(model: Live2DModel): void {
         this.model = model;
+        this._enablePhysics(model);
     }
 
     /**
-     * 应用皮肤设置
-     * @param state 当前状态
+     * 启用物理演算（头发/衣服摆动）
+     */
+    private _enablePhysics(model: Live2DModel): void {
+        if (!this._physicsData) return;
+
+        try {
+            const internal = (model as any).internalModel;
+            if (!internal) return;
+
+            // pixi-live2d-display 的 Cubism4Model 会在 update() 内自动执行 physics.evaluate()
+            // 如果模型已加载 physics，直接标记完成
+            if (internal.physics) {
+                console.log('[Live2D] Physics auto-enabled by pixi-live2d-display');
+                return;
+            }
+
+            // 后备：手动通过 createPhysics() 创建
+            if (typeof internal.createPhysics === 'function') {
+                internal.createPhysics(internal.coreModel, this._physicsData);
+                console.log('[Live2D] Physics manually enabled');
+            }
+        } catch (e) {
+            console.log('[Live2D] Physics unavailable for this model');
+        }
+    }
+
+    private _reactionTimer: ReturnType<typeof setTimeout> | null = null;
+    private _currentState: string = 'idle';
+
+    /**
+     * 应用状态对应的动作和表情
      */
     applySettings(state: string): void {
         if (!this.model || !this.manifest) return;
+        this._currentState = state;
 
         try {
-            // 从manifest中获取状态对应的动作和表情
-            if (this.manifest.stateMotionMapping && this.manifest.stateMotionMapping[state]) {
-                const stateConfig = this.manifest.stateMotionMapping[state];
-                
-                // 播放动作
-                if (stateConfig.motion) {
-                    this.playMotion(stateConfig.motion);
-                }
-                
-                // 播放表情
-                if (stateConfig.expression) {
-                    this.playExpression(stateConfig.expression);
-                }
+            if (this.manifest.stateMotionMapping?.[state]) {
+                const cfg = this.manifest.stateMotionMapping[state];
+                if (cfg.motion) this._playMotion(cfg.motion);
+                if (cfg.expression) this._playExpression(cfg.expression);
             }
         } catch (error) {
-            console.error('应用皮肤设置失败:', error);
+            console.error('[Live2D] Failed to apply settings:', error);
+        }
+    }
+
+    /**
+     * 应用交互反应（临时表情，覆盖后自动恢复）
+     */
+    applyReaction(reaction: string): void {
+        if (!this.model || !this.manifest) return;
+
+        try {
+            const cfg = this.manifest.reactionMapping?.[reaction];
+            if (!cfg) return;
+
+            if (cfg.motion) this._playMotion(cfg.motion);
+            if (cfg.expression) {
+                this._playExpression(cfg.expression);
+                // 2.5 秒后恢复到当前状态的表情
+                if (this._reactionTimer) clearTimeout(this._reactionTimer);
+                this._reactionTimer = setTimeout(() => {
+                    this.applySettings(this._currentState);
+                }, 2500);
+            }
+        } catch (error) {
+            console.error('[Live2D] Failed to apply reaction:', error);
         }
     }
 
     /**
      * 播放动作
-     * @param motionPath 动作路径
+     * 支持格式:
+     * - "GroupName" => 从该组随机播放 (如 "Idle")
+     * - "GroupName:index" => 播放指定索引 (如 "Idle:0")
+     * - "" => 不播放
      */
-    private playMotion(motionPath: string): void {
-        if (!this.model) return;
+    private _playMotion(motionPath: string): void {
+        if (!this.model || !motionPath) return;
 
-        try {
-            // 尝试直接使用动作路径
-            this.model.motion(motionPath);
-        } catch (e) {
-            console.log('直接使用动作路径失败，尝试使用动作索引');
-            
-            // 根据动作文件名确定索引
-            let motionIndex = 0;
-            if (motionPath.includes('Wait_01')) {
-                motionIndex = 14; // 00_Wait_01.motion3.json
-            } else if (motionPath.includes('Appeal_01')) {
-                motionIndex = 24; // 00_Appeal_01.motion3.json
-            } else if (motionPath.includes('Happy_01')) {
-                motionIndex = 13; // 00_Happy_01.motion3.json
-            } else if (motionPath.includes('Sad_01')) {
-                motionIndex = 36; // 00_Sad_01.motion3.json
-            } else if (motionPath.includes('Anger_01')) {
-                motionIndex = 0; // 00_Anger_01.motion3.json
-            } else if (motionPath.includes('idle')) {
-                motionIndex = 1; // 通用idle动作
-            } else if (motionPath.includes('touch') || motionPath.includes('tap')) {
-                motionIndex = 0; // 通用tap动作
-            } else {
-                motionIndex = 2; // 其他动作
-            }
-            
-            // 尝试使用空动作组和索引播放
-            try {
-                this.model.motion('', motionIndex);
-            } catch (error) {
-                console.error('播放动作失败:', error);
+        let group = motionPath;
+        let index: number | undefined;
+
+        // 解析 "Group:Index" 格式
+        const colonIdx = motionPath.lastIndexOf(':');
+        if (colonIdx > 0) {
+            const parsedIdx = parseInt(motionPath.slice(colonIdx + 1), 10);
+            if (!isNaN(parsedIdx)) {
+                group = motionPath.slice(0, colonIdx);
+                index = parsedIdx;
             }
         }
+
+        this.model.motion(group, index).catch((err: Error) => {
+            console.error('[Live2D] Failed to play motion:', motionPath, err);
+        });
     }
 
-    /**
-     * 播放表情
-     * @param expressionPath 表情路径
-     */
-    private playExpression(expressionPath: string): void {
+    private _playExpression(expressionPath: string): void {
         if (!this.model) return;
-
         try {
             this.model.expression(expressionPath);
         } catch (error) {
-            console.error('播放表情失败:', error);
+            console.error('[Live2D] Failed to play expression:', error);
         }
     }
 
-    /**
-     * 清理资源
-     */
     cleanup(): void {
+        this._physicsData = null;
         this.model = null;
         this.manifest = null;
         this.supportedStates = [];
     }
 
-    /**
-     * 获取支持的状态列表
-     */
     getSupportedStates(): string[] {
         return this.supportedStates;
     }

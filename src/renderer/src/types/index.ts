@@ -1,5 +1,5 @@
-/** 桌宠状态类型 */
-export type PetState = 'idle' | 'working' | 'happy' | 'sad' | 'sleeping' | 'shy' | 'angry' | 'surprised';
+/** 桌宠状态类型 — 皮肤自行声明，不硬编码 */
+export type PetState = string;
 
 /** 桌宠情绪类型 */
 export type PetEmotion = 'normal' | 'confused' | 'surprised' | 'excited' | 'angry' | 'thinking' | 'shy';
@@ -121,11 +121,13 @@ export interface SkinManifest {
         height: number;
     };
     /** 默认状态 */
-    defaultState: PetState;
+    defaultState: string;
     /** 支持的状态 */
-    supportedStates: PetState[];
+    supportedStates: string[];
     /** 支持的反应 */
     supportedReactions: string[];
+    /** 状态中文标签（皮肤自行定义） */
+    stateLabels: Record<string, string>;
     /** 状态动作映射 */
     stateMotionMapping: Record<string, {
         motion: string;
@@ -218,6 +220,8 @@ export interface PetAPI {
     toggleSettingsWindow: () => Promise<boolean>;
     openReminderWindow: () => Promise<boolean>;
     toggleReminderWindow: () => Promise<boolean>;
+    openChatHistoryWindow: () => Promise<boolean>;
+    toggleChatHistoryWindow: () => Promise<boolean>;
     relayToMain: (channel: string, ...args: any[]) => Promise<boolean>;
     on: (channel: string, callback: (...args: any[]) => void) => void;
     removeListener: (channel: string, callback: (...args: any[]) => void) => void;
@@ -230,6 +234,8 @@ export interface PetAPI {
     msTodoPush: (task: any, msListId: string) => Promise<{ success: boolean; microsoftToDoId?: string; error?: string }>;
     msTodoDelete: (msListId: string, msTaskId: string) => Promise<{ success: boolean; error?: string }>;
     msTodoPushLocal: (localTasks: any[], msListId: string) => Promise<{ success: number; failed: number; results: any[]; error?: string }>;
+    // Claude CLI
+    claudeChat: (prompt: string, cliPath: string, onChunk?: (text: string) => void) => Promise<string>;
     onStateChange: (callback: (newState: string) => void) => () => void;
     onEmotionChange: (callback: (emotion: string) => void) => () => void;
     onShowBubble: (callback: (message: BubbleMessage) => void) => () => void;
@@ -243,3 +249,36 @@ declare global {
         petAPI: PetAPI;
     }
 }
+
+/**
+ * AI 连接配置
+ * 支持本地 Ollama 和第三方 OpenAI 兼容 API
+ */
+export type AIProvider = 'local' | 'third_party' | 'claude_cli';
+
+export interface AIConfig {
+    provider: AIProvider;
+    // 本地 Ollama
+    ollamaUrl: string;
+    ollamaModel: string;
+    // 第三方 OpenAI 兼容 API
+    apiUrl: string;
+    apiKey: string;
+    model: string;
+    // Claude CLI
+    claudeCLIPath: string;
+    // 通用
+    enabled: boolean;
+}
+
+/** AI 配置默认值 */
+export const DEFAULT_AI_CONFIG: AIConfig = {
+    provider: 'local',
+    ollamaUrl: 'http://192.168.2.132:11434',
+    ollamaModel: 'qwen2.5:7b',
+    apiUrl: 'https://api.openai.com/v1',
+    apiKey: '',
+    model: 'gpt-4o-mini',
+    claudeCLIPath: 'claude',
+    enabled: false,
+};

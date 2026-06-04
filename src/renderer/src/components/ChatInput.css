@@ -1,0 +1,130 @@
+/* ===================== 底部整行输入栏 ===================== */
+.chatinput-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 99;
+    padding: 8px 10px 10px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 0 0 12px 12px;
+    animation: slideUp 0.18s ease;
+}
+
+@keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ===================== 指令提示行 ===================== */
+.chatinput-hints {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+}
+
+.chatinput-hint {
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    background: #f3f3f8;
+    color: #888;
+    cursor: pointer;
+    font-family: 'SF Mono', 'Consolas', monospace;
+    transition: all 0.15s;
+    line-height: 1.6;
+}
+
+.chatinput-hint:hover {
+    background: #e0e0f0;
+    color: #555;
+}
+
+/* ===================== 输入行 ===================== */
+.chatinput-input-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.chatinput-textarea {
+    flex: 1;
+    min-height: 32px;
+    max-height: 100px;           /* ≈ 4 行 */
+    padding: 5px 10px;
+    border: 1px solid #e0e0e8;
+    border-radius: 8px;
+    outline: none;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #333;
+    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    resize: none;
+    background: #fafafc;
+    overflow-y: auto;
+    transition: border-color 0.15s;
+}
+
+.chatinput-textarea:focus {
+    border-color: #a0a8d0;
+    background: #fff;
+}
+
+.chatinput-textarea::placeholder {
+    color: #b8b8c2;
+}
+
+.chatinput-textarea:disabled {
+    opacity: 0.5;
+}
+
+/* 隐藏滚动条 */
+.chatinput-textarea::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+}
+
+.chatinput-textarea {
+    scrollbar-width: none;          /* Firefox */
+    -ms-overflow-style: none;       /* IE/Edge */
+}
+
+/* ===================== 发送按钮 ===================== */
+.chatinput-send {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: #4a6cf7;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+.chatinput-send:hover:not(:disabled) {
+    background: #3b5ce5;
+}
+
+.chatinput-send:disabled {
+    background: #d4d4dc;
+    cursor: not-allowed;
+}
+
+.chatinput-send.loading {
+    animation: dotPulse 1s steps(1) infinite;
+}
+
+@keyframes dotPulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
+}

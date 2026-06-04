@@ -53,17 +53,11 @@ class StateMachine {
 
     /**
      * 执行状态转换
-     * 当前实现允许任何状态转到任何状态
+     * 皮肤自行声明支持的状态，状态机不限制
      * @param newState - 目标状态
      * @returns 转换后的新状态
-     * @throws 当 newState 不是合法的 PetState 时抛出错误
      */
     transition(newState: PetState): PetState {
-        const validStates: PetState[] = ['idle', 'working', 'happy', 'sad', 'sleeping', 'shy', 'angry', 'surprised'];
-        if (!validStates.includes(newState)) {
-            throw new Error(`Invalid state: ${newState}`);
-        }
-
         const oldState = this.currentState;
         this.currentState = newState;
 

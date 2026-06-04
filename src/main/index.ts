@@ -20,6 +20,9 @@ let settingsWindow: BrowserWindow | null = null;
 /** 提醒窗口实例 */
 let reminderWindow: BrowserWindow | null = null;
 
+/** 对话历史窗口实例 */
+let chatHistoryWindow: BrowserWindow | null = null;
+
 /**
  * 获取Todo窗口实例（供IPC使用）
  */
@@ -39,6 +42,10 @@ export function getSettingsWindow(): BrowserWindow | null {
  */
 export function getReminderWindow(): BrowserWindow | null {
     return reminderWindow;
+}
+
+export function getChatHistoryWindow(): BrowserWindow | null {
+    return chatHistoryWindow;
 }
 
 /** 正在退出标志，防止重复退出 */
@@ -167,6 +174,44 @@ function createReminderWindow(): void {
 }
 
 /**
+ * 创建对话历史窗口
+ */
+function createChatHistoryWindow(): void {
+    if (chatHistoryWindow) {
+        if (chatHistoryWindow.isMinimized()) chatHistoryWindow.restore();
+        chatHistoryWindow.focus();
+        return;
+    }
+
+    chatHistoryWindow = new BrowserWindow({
+        width: 450,
+        height: 600,
+        title: '对话历史',
+        frame: true,
+        resizable: true,
+        alwaysOnTop: false,
+        skipTaskbar: false,
+        webPreferences: {
+            preload: join(__dirname, '../preload/index.js'),
+            contextIsolation: true,
+            nodeIntegration: false
+        }
+    });
+
+    if (process.env.ELECTRON_RENDERER_URL) {
+        chatHistoryWindow.loadURL(`${process.env.ELECTRON_RENDERER_URL}#chat-history`);
+    } else {
+        chatHistoryWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+            hash: '#chat-history'
+        });
+    }
+
+    chatHistoryWindow.on('closed', () => {
+        chatHistoryWindow = null;
+    });
+}
+
+/**
  * 创建桌宠主窗口
  * 设置透明、无边框、置顶等属性
  */
@@ -254,6 +299,22 @@ function createMainWindow(): void {
         return true;
     });
 
+    // 注册对话历史窗口的IPC处理器
+    ipcMain.handle('open-chat-history-window', () => {
+        createChatHistoryWindow();
+        return true;
+    });
+
+    ipcMain.handle('toggle-chat-history-window', () => {
+        if (chatHistoryWindow && !chatHistoryWindow.isDestroyed()) {
+            chatHistoryWindow.close();
+            chatHistoryWindow = null;
+        } else {
+            createChatHistoryWindow();
+        }
+        return true;
+    });
+
     // 注册中转IPC：设置/提醒窗口发消息给主窗口
     ipcMain.handle('relay-to-main', (_event, channel: string, ...args: any[]) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -304,7 +365,7 @@ function createMainWindow(): void {
       skinGroups.forEach(group => {
         const groupSubmenu = group.skins.map((skin, index) => ({
           label: skin.manifest.description,
-          checked: index === 0 && group.id === 'default',
+          checked: index === 0 && group.id === 'cubism',
           type: 'radio',
           click: () => {
             console.log(`切换到皮肤: ${skin.id}`);

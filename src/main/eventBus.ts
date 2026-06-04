@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 
-/** 桌宠状态类型 */
-export type PetState = 'idle' | 'working' | 'happy' | 'sad' | 'sleeping';
+/** 桌宠状态类型 — 皮肤自行声明，不硬编码 */
+export type PetState = string;
 
 /** 桌宠情绪类型 */
 export type PetEmotion = 'normal' | 'confused' | 'surprised' | 'excited' | 'angry' | 'thinking' | 'shy';

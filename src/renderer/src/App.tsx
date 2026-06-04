@@ -1,17 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PetState } from './types';
+import { PetState, ReminderType } from './types';
 import { StateMachine } from './state/stateMachine';
 import Pet from './components/Pet';
 import Pomodoro from './components/Pomodoro';
 import ReminderApp from './components/ReminderApp';
 import SettingsApp from './components/SettingsApp';
 import Bubble, { BubbleRef } from './components/Bubble';
+import ChatInput from './components/ChatInput';
+import ChatHistory from './components/ChatHistory';
+import { ChatHistoryLauncher } from './components/ChatHistoryLauncher';
 import TodoApp from './components/TodoApp';
 import ErrorBoundary from './components/TodoApp/ErrorBoundary';
 import { TodoLauncher } from './components/TodoLauncher';
+import { ChatMessage } from './utils/aiChatService';
 import { mergeMsTasks } from './components/TodoApp/utils/msSync';
 import { isInTodayView } from './components/TodoApp/utils/taskFilter';
 import { useTodoStore } from './components/TodoApp/store/useTodoStore';
+import { useChatStore } from './store/useChatStore';
 import usePetEvents from './hooks/usePetEvents';
 import { getLocale, setLocale, subscribeLocaleChange, Locale, t } from './i18n';
 import { getDialogueManager } from './utils/dialogueSystem';
@@ -38,13 +43,6 @@ function getStateLabels(): Record<string, string> {
 }
 
 const SKIN_GROUPS: SkinGroup[] = [
-    {
-        id: 'default',
-        name: '默认',
-        skins: [
-            { id: 'default', name: '默认皮肤' }
-        ]
-    },
     {
         id: 'cubism',
         name: 'Cubism SDK',
@@ -89,7 +87,7 @@ const SKIN_GROUPS: SkinGroup[] = [
 function App(): JSX.Element {
     const [stateMachine] = useState(() => new StateMachine('idle'));
     const [currentState, setCurrentState] = useState<PetState>('idle');
-    const [currentGroup, setCurrentGroup] = useState('default');
+    const [currentGroup, setCurrentGroup] = useState('cubism');
     const [currentSkin, setCurrentSkin] = useState('cubism-Hiyori');
     const [supportedStates, setSupportedStates] = useState<string[]>(['idle', 'working', 'happy', 'sad', 'sleeping', 'shy', 'angry', 'surprised']);
     const [stateLabels, setStateLabels] = useState<Record<string, string>>(getStateLabels());
@@ -106,6 +104,10 @@ function App(): JSX.Element {
         const saved = localStorage.getItem('pet-show-todolauncher');
         return saved !== null ? saved === 'true' : true;
     });
+    const [showChatHistoryLauncher, setShowChatHistoryLauncher] = useState(() => {
+        const saved = localStorage.getItem('pet-show-chathistory');
+        return saved !== null ? saved === 'true' : true;
+    });
     /** 激活的提醒数量 */
     const [reminderCount, setReminderCount] = useState(0);
     /** 是否在图标上显示提醒数量 */
@@ -117,10 +119,10 @@ function App(): JSX.Element {
     const [currentRoute, setCurrentRoute] = useState(window.location.hash.slice(1) || '');
     /** 任务数量（用于设置面板显示） */
     const [taskCount, setTaskCount] = useState(0);
-    /** 右键快速添加状态 */
-    const [showContextQuickAdd, setShowContextQuickAdd] = useState(false);
-    const [contextQuickText, setContextQuickText] = useState('');
-    const contextQuickRef = useRef<HTMLInputElement>(null);
+    /** 右键对话输入框状态 */
+    const [showChatInput, setShowChatInput] = useState(false);
+    /** AI 对话历史 */
+    const chatHistoryRef = useRef<ChatMessage[]>([]);
     const hasShownGreeting = useRef(false);
     const bubbleRef = useRef<BubbleRef>(null);
     const appRef = useRef<HTMLDivElement>(null);
@@ -175,6 +177,13 @@ function App(): JSX.Element {
         return () => {
             dialogueManager.destroy();
         };
+    }, []);
+
+    /**
+     * 加载对话历史
+     */
+    useEffect(() => {
+        useChatStore.getState().loadFromStorage();
     }, []);
 
     /**
@@ -333,6 +342,11 @@ function App(): JSX.Element {
             };
             window.petAPI.on('todolauncher-visibility', handleTodoLauncherVisibility);
 
+            const handleChatHistoryVisibility = (visible: boolean) => {
+                setShowChatHistoryLauncher(visible);
+            };
+            window.petAPI.on('chat-history-visibility', handleChatHistoryVisibility);
+
             const handleReminderBadgeVisibility = (visible: boolean) => {
                 setShowReminderBadge(visible);
             };
@@ -405,25 +419,180 @@ function App(): JSX.Element {
     }, []);
 
     /**
-     * 右键桌宠：显示快捷添加输入框
+     * 右键桌宠：打开对话输入框
      */
     const handlePetContextMenu = useCallback((e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
-        setShowContextQuickAdd(true);
-        setSettingsOpen(false);
-        setTimeout(() => contextQuickRef.current?.focus(), 50);
+        setShowChatInput(true);
     }, []);
 
     /**
-     * 右键快速添加确认
+     * 对话命令处理（/task /remind /todo）
      */
-    const handleContextQuickAdd = useCallback(async () => {
-        if (!contextQuickText.trim() || !window.petAPI) return;
-        await window.petAPI.taskQuickAdd(contextQuickText.trim());
-        setContextQuickText('');
-        setShowContextQuickAdd(false);
-    }, [contextQuickText]);
+/** 提醒自然语言解析结果 */
+function parseReminderArgs(args: string): {
+    title: string;
+    type: ReminderType;
+    time: string;
+    date?: string;
+} {
+    const now = new Date();
+    let type: ReminderType = 'once';
+    let time = '09:00';
+    let date: string | undefined = undefined;
+    let title = args;
+
+    // 每天 → daily
+    if (/每天/.test(title)) { type = 'daily'; title = title.replace(/每天/, '') }
+    // 每周 → weekly（默认今天开始）
+    if (/每周/.test(title)) { type = 'weekly'; title = title.replace(/每周/, '') }
+    // 每月 → monthly
+    if (/每月/.test(title)) { type = 'monthly'; title = title.replace(/每月/, '') }
+
+    // 日期：明天 / 今天
+    if (/明天/.test(title)) {
+        const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
+        date = tomorrow.toISOString().slice(0, 10);
+        title = title.replace(/明天/, '');
+    }
+    if (/今天/.test(title)) {
+        date = now.toISOString().slice(0, 10);
+        title = title.replace(/今天/, '');
+    }
+
+    // 时间：下午3点 / 上午9点 / 3点半 / 15:00
+    const timeMatch = title.match(/(下午|上午|中午)?(\d{1,2})[点:：](\d{1,2})?(半)?/);
+    if (timeMatch) {
+        let hour = parseInt(timeMatch[2]);
+        const period = timeMatch[1];
+        let minute = timeMatch[3] ? parseInt(timeMatch[3]) : (timeMatch[4] === '半' ? 30 : 0);
+
+        if (period === '下午' && hour < 12) hour += 12;
+        if (period === '中午' && hour < 12) hour += 12;
+        if (period === '上午' && hour === 12) hour = 0;
+        // 无前缀且 <= 6 → 假定下午（如"3点" → 15:00）
+        if (!period && hour <= 6 && hour >= 1) hour += 12;
+
+        time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        title = title.replace(timeMatch[0], '');
+    }
+
+    // 清理多余空白和连接词
+    title = title.replace(/^[\s,，、]+|[\s,，、]+$/g, '');
+
+    return {
+        title: title || args.replace(/[每天每周每月今天明天]/g, '').trim() || args,
+        type,
+        time,
+        date: type === 'once' ? date : undefined,
+    };
+}
+
+    const handleChatCommand = useCallback(async (command: string, args: string) => {
+        if (!window.petAPI) return;
+        if (command === '/todo') {
+            // 复用双击的任务面板逻辑
+            try {
+                const tasks = await window.petAPI.taskGetAll();
+                const todayTasks = tasks.filter((t: any) => isInTodayView(t));
+                const bubbleTasks = todayTasks.slice(0, 6).map((t: any) => ({
+                    id: t.id,
+                    title: t.title,
+                    status: t.status,
+                    priority: t.priority
+                }));
+                bubbleRef.current?.showTodoPanel(bubbleTasks);
+                useChatStore.getState().addMessage({
+                    role: 'pet', content: todayTasks.length > 0 ? `今日有 ${todayTasks.length} 个待办任务` : '今天没有待办任务', source: 'system',
+                });
+            } catch (e) {
+                bubbleRef.current?.showMessage({ text: '获取任务失败', type: 'system', duration: 3000 });
+                useChatStore.getState().addMessage({
+                    role: 'pet', content: '获取任务失败', source: 'system',
+                });
+            }
+        } else if (command === '/task') {
+            if (!args) {
+                bubbleRef.current?.showMessage({ text: '用法: /task 任务标题', type: 'system', duration: 4000 });
+                useChatStore.getState().addMessage({
+                    role: 'pet', content: '用法: /task 任务标题', source: 'system',
+                });
+                return;
+            }
+            await window.petAPI.taskQuickAdd(args);
+            const msg = `已创建任务: ${args}`;
+            bubbleRef.current?.showMessage({ text: msg, type: 'info', duration: 4000 });
+            useChatStore.getState().addMessage({
+                role: 'pet', content: msg, source: 'system',
+            });
+        } else if (command === '/remind') {
+            if (!args) {
+                bubbleRef.current?.showMessage({
+                    text: '用法:\n/remind 下午3点开会\n/remind 明天9点提交报告\n/remind 每天8点半喝水',
+                    type: 'system',
+                    duration: 5000
+                });
+                return;
+            }
+            const parsed = parseReminderArgs(args);
+            const reminder: any = {
+                title: parsed.title,
+                type: parsed.type,
+                time: parsed.time,
+                enabled: true
+            };
+            if (parsed.date) reminder.date = parsed.date;
+            await window.petAPI.reminderAdd(reminder);
+            const typeLabel: Record<string, string> = {
+                once: '一次性', daily: '每天', weekly: '每周', monthly: '每月'
+            };
+            const dateStr = parsed.date ? ` ${parsed.date}` : '';
+            const remindMsg = `🔔 已创建提醒: ${parsed.title}\n${typeLabel[parsed.type]} · ${parsed.time}${dateStr}`;
+            bubbleRef.current?.showMessage({
+                text: remindMsg,
+                type: 'reminder',
+                duration: 5000,
+                actions: [{ label: '知道了', action: 'dismiss', style: 'primary' }]
+            });
+            useChatStore.getState().addMessage({
+                role: 'pet', content: `已创建提醒: ${parsed.title}`, source: 'system',
+            });
+        }
+    }, []);
+
+    /**
+     * 对话气泡显示（普通文本）
+     */
+    const handleChatBubble = useCallback((text: string, type: 'emotion' | 'info' | 'system' = 'emotion') => {
+        bubbleRef.current?.hideMessage();  // 先关旧气泡
+        bubbleRef.current?.showMessage({ text, type, duration: type === 'system' ? 4000 : 6000 });
+    }, []);
+
+    /**
+     * 流式气泡更新（AI streaming 实时更新文本）
+     */
+    const handleChatBubbleStream = useCallback((text: string) => {
+        bubbleRef.current?.updateStreamText(text);
+    }, []);
+
+    /**
+     * 获取对话历史
+     */
+    const getChatHistory = useCallback((): ChatMessage[] => {
+        const systemMsg: ChatMessage = {
+            role: 'system',
+            content: '你是一个桌面宠物伙伴。说话可爱、元气、充满活力。回复简洁（不超过2句话），使用颜文字。当用户让你执行操作时，不需要回复"好的"之类的确认词，直接执行即可。'
+        };
+        return [systemMsg, ...chatHistoryRef.current.slice(-8)];
+    }, []);
+
+    /**
+     * 添加到对话历史
+     */
+    const addToChatHistory = useCallback((msg: ChatMessage) => {
+        chatHistoryRef.current = [...chatHistoryRef.current.slice(-20), msg];
+    }, []);
 
     /**
      * 处理调整大小开始
@@ -556,6 +725,15 @@ function App(): JSX.Element {
         );
     }
 
+    // 如果是 chat-history 路由，只渲染 ChatHistory（独立窗口模式）
+    if (currentRoute === 'chat-history') {
+        return (
+            <div className="chathistory-window-container">
+                <ChatHistory standalone />
+            </div>
+        );
+    }
+
     return (
         <div className="app-container" ref={appRef}>
             {/* 四角调整大小手柄 */}
@@ -607,6 +785,9 @@ function App(): JSX.Element {
                         <div className={`icon-bar-item ${showTodoLauncher ? 'icon-visible' : 'icon-hidden'}`}>
                             <TodoLauncher />
                         </div>
+                        <div className={`icon-bar-item ${showChatHistoryLauncher ? 'icon-visible' : 'icon-hidden'}`}>
+                            <ChatHistoryLauncher />
+                        </div>
                     </div>
 
                     <Bubble ref={bubbleRef} />
@@ -633,30 +814,16 @@ function App(): JSX.Element {
                         />
                     </div>
 
-                    {/* 右键快速添加任务浮层 */}
-                    {showContextQuickAdd && (
-                        <div
-                            className="context-quick-add"
-                            onClick={e => e.stopPropagation()}
-                        >
-                            <div className="context-quick-label">✏️ 快速记一条任务</div>
-                            <div className="context-quick-row">
-                                <input
-                                    ref={contextQuickRef}
-                                    className="context-quick-input"
-                                    placeholder="任务标题，回车确认..."
-                                    value={contextQuickText}
-                                    onChange={e => setContextQuickText(e.target.value)}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') handleContextQuickAdd();
-                                        if (e.key === 'Escape') { setShowContextQuickAdd(false); setContextQuickText(''); }
-                                    }}
-                                />
-                                <button className="context-quick-submit" onClick={handleContextQuickAdd}>添加</button>
-                                <button className="context-quick-cancel" onClick={() => { setShowContextQuickAdd(false); setContextQuickText(''); }}>✕</button>
-                            </div>
-                        </div>
-                    )}
+                    {/* 右键对话输入框 */}
+                    <ChatInput
+                        visible={showChatInput}
+                        onClose={() => setShowChatInput(false)}
+                        onCommand={handleChatCommand}
+                        onBubble={handleChatBubble}
+                        onBubbleStream={handleChatBubbleStream}
+                        getHistory={getChatHistory}
+                        addToHistory={addToChatHistory}
+                    />
         </div>
     );
 }

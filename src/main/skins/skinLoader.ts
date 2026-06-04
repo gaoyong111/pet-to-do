@@ -207,7 +207,7 @@ class SkinLoader {
    * @returns 默认皮肤，不存在返回 null
    */
   getDefaultSkin(): Skin | null {
-    return this.loadSkin('default');
+    return this.loadSkin('cubism-Hiyori');
   }
 
   /**
@@ -248,7 +248,6 @@ class SkinLoader {
    */
   private getGroupName(groupId: string): string {
     const groupNames: Record<string, string> = {
-      'default': '默认',
       'cubism': 'Cubism SDK',
       'anime': '二次元',
       'azurlane': '碧蓝航线',

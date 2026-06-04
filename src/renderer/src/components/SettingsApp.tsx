@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { PetState } from '../types';
 import { getLocale, setLocale, subscribeLocaleChange, getAvailableLocales, Locale, t } from '../i18n';
+import { AIConfig, AIProvider, DEFAULT_AI_CONFIG } from '../types';
+import { loadAIConfig, saveAIConfig, getAIChatService } from '../utils/aiChatService';
 import './SettingsApp.css';
 
 interface SkinGroup {
@@ -10,13 +11,6 @@ interface SkinGroup {
 }
 
 const SKIN_GROUPS: SkinGroup[] = [
-    {
-        id: 'default',
-        name: '默认',
-        skins: [
-            { id: 'default', name: '默认皮肤' }
-        ]
-    },
     {
         id: 'cubism',
         name: 'Cubism SDK',
@@ -57,29 +51,33 @@ const SKIN_GROUPS: SkinGroup[] = [
     },
 ];
 
-const SUPPORTED_STATES: PetState[] = ['idle', 'working', 'happy', 'sad', 'sleeping', 'shy', 'angry', 'surprised'];
-
-function getStateLabels(): Record<string, string> {
+/** 从当前皮肤 manifest 动态加载支持的状态/反应/文案 */
+async function loadSkinCapabilities(skinId: string): Promise<{
+  supportedStates: string[];
+  supportedReactions: string[];
+  stateLabels: Record<string, string>;
+}> {
+  try {
+    const resp = await fetch(`/skins/${skinId}/manifest.json`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const m = await resp.json();
     return {
-        idle: t('state.idle'),
-        working: t('state.working'),
-        happy: t('state.happy'),
-        sad: t('state.sad'),
-        sleeping: t('state.sleeping'),
-        tap: t('state.tap'),
-        angry: t('state.angry'),
-        shy: t('state.shy'),
-        surprised: t('state.surprised')
+      supportedStates: m.supportedStates || ['idle'],
+      supportedReactions: m.supportedReactions || [],
+      stateLabels: m.stateLabels || { idle: '待机中' },
     };
+  } catch {
+    return { supportedStates: ['idle'], supportedReactions: [], stateLabels: { idle: '待机中' } };
+  }
 }
 
 function SettingsApp(): JSX.Element {
     const [currentLocale, setCurrentLocale] = useState<Locale>(getLocale());
     const [currentGroup, setCurrentGroup] = useState(() => localStorage.getItem('pet-skin-group') || 'cubism');
     const [currentSkin, setCurrentSkin] = useState(() => localStorage.getItem('pet-skin-id') || 'cubism-Hiyori');
-    const [currentState, setCurrentState] = useState<PetState>(() => {
+    const [currentState, setCurrentState] = useState<string>(() => {
         const saved = localStorage.getItem('pet-current-state');
-        return (saved as PetState) || 'idle';
+        return saved || 'idle';
     });
     const [showPomodoro, setShowPomodoro] = useState(() => {
         const saved = localStorage.getItem('pet-show-pomodoro');
@@ -93,8 +91,21 @@ function SettingsApp(): JSX.Element {
         const saved = localStorage.getItem('pet-show-todolauncher');
         return saved !== null ? saved === 'true' : true;
     });
+    const [showChatHistoryLauncher, setShowChatHistoryLauncher] = useState(() => {
+        const saved = localStorage.getItem('pet-show-chathistory');
+        return saved !== null ? saved === 'true' : true;
+    });
+    const [supportedStates, setSupportedStates] = useState<string[]>(['idle']);
+    const [supportedReactions, setSupportedReactions] = useState<string[]>([]);
+    const [stateLabels, setStateLabels] = useState<Record<string, string>>({ idle: '待机中' });
 
-    const stateLabels = getStateLabels();
+    // === AI 配置 ===
+    const [aiConfig, setAiConfig] = useState<AIConfig>(() => loadAIConfig());
+    const [aiDetectedModels, setAiDetectedModels] = useState<string[]>([]);
+    const [aiDetecting, setAiDetecting] = useState(false);
+    const [aiTesting, setAiTesting] = useState(false);
+    const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+    const [showApiKey, setShowApiKey] = useState(false);
 
     const currentGroupData = SKIN_GROUPS.find(group => group.id === currentGroup);
     const currentSkins = currentGroupData?.skins || [];
@@ -104,6 +115,15 @@ function SettingsApp(): JSX.Element {
             setCurrentLocale(locale);
         });
     }, []);
+
+    // 皮肤切换时重新加载该皮肤支持的状态/反应/文案
+    useEffect(() => {
+        loadSkinCapabilities(currentSkin).then((caps) => {
+            setSupportedStates(caps.supportedStates);
+            setSupportedReactions(caps.supportedReactions);
+            setStateLabels(caps.stateLabels);
+        });
+    }, [currentSkin]);
 
     const handleLocaleChange = useCallback((locale: Locale) => {
         setLocale(locale);
@@ -131,7 +151,7 @@ function SettingsApp(): JSX.Element {
         }
     }, []);
 
-    const handleStateChange = useCallback((state: PetState) => {
+    const handleStateChange = useCallback((state: string) => {
         setCurrentState(state);
         localStorage.setItem('pet-current-state', state);
         if (window.petAPI) {
@@ -152,6 +172,85 @@ function SettingsApp(): JSX.Element {
         }
     }, []);
 
+    // === AI 配置处理 ===
+    const handleAIProviderChange = useCallback((provider: AIProvider) => {
+        setAiConfig(prev => {
+            const next = { ...prev, provider };
+            saveAIConfig(next);
+            getAIChatService().setConfig(next);
+            return next;
+        });
+    }, []);
+
+    const handleAIEnabledToggle = useCallback(() => {
+        setAiConfig(prev => {
+            const next = { ...prev, enabled: !prev.enabled };
+            saveAIConfig(next);
+            getAIChatService().setConfig(next);
+            return next;
+        });
+    }, []);
+
+    const handleAIConfigChange = useCallback((field: string, value: string) => {
+        setAiConfig(prev => {
+            const next = { ...prev, [field]: value };
+            saveAIConfig(next);
+            getAIChatService().setConfig(next);
+            return next;
+        });
+    }, []);
+
+    const handleDetectOllama = useCallback(async () => {
+        setAiDetecting(true);
+        setAiDetectedModels([]);
+        try {
+            const svc = getAIChatService();
+            const models = await svc.detectOllamaModels(aiConfig.ollamaUrl);
+            setAiDetectedModels(models);
+            if (models.length > 0 && !aiConfig.ollamaModel) {
+                handleAIConfigChange('ollamaModel', models[0]);
+            }
+        } catch (err) {
+            setAiDetectedModels([]);
+        } finally {
+            setAiDetecting(false);
+        }
+    }, [aiConfig.ollamaUrl, aiConfig.ollamaModel, handleAIConfigChange]);
+
+    const handleTestAI = useCallback(async () => {
+        setAiTesting(true);
+        setAiTestResult(null);
+        try {
+            const svc = getAIChatService();
+            svc.setConfig(aiConfig);
+            if (aiConfig.provider === 'claude_cli') {
+                // Claude CLI：发送简短测试
+                const result = await svc.chat([
+                    { role: 'user', content: '回复"OK"两个字，不要多说' }
+                ]);
+                if (result && result.includes('OK')) {
+                    setAiTestResult({ ok: true, message: '连接成功！Claude CLI 正常。' });
+                } else {
+                    setAiTestResult({ ok: true, message: `连接成功，响应: "${result?.slice(0, 30)}"` });
+                }
+            } else {
+                const result = await svc.testConnection();
+                setAiTestResult(result);
+            }
+        } catch (err) {
+            setAiTestResult({ ok: false, message: `测试异常: ${(err as Error).message}` });
+        } finally {
+            setAiTesting(false);
+        }
+    }, [aiConfig]);
+
+    // 初始化时自动检测 Ollama（仅本地模式）
+    useEffect(() => {
+        if (aiConfig.provider === 'local' && aiConfig.enabled) {
+            handleDetectOllama();
+        }
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
     const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
         <div className={`toggle-switch${checked ? ' on' : ''}`} onClick={onChange}>
             <div className="track" />
@@ -166,16 +265,8 @@ function SettingsApp(): JSX.Element {
             {/* 当前状态 */}
             <div className="section-header">当前状态</div>
             <div className="settings-card">
-                <div className="state-row">
-                    {SUPPORTED_STATES.map((state) => (
-                        <button
-                            key={state}
-                            className={`state-pill ${currentState === state ? 'active' : ''}`}
-                            onClick={() => handleStateChange(state)}
-                        >
-                            {stateLabels[state] || state}
-                        </button>
-                    ))}
+                <div className="state-placeholder">
+                    ⚠️ 状态机功能待实现
                 </div>
             </div>
 
@@ -283,9 +374,189 @@ function SettingsApp(): JSX.Element {
                         }}
                     />
                 </div>
+                <div
+                    className="switch-item"
+                    onClick={() => {
+                        setShowChatHistoryLauncher(!showChatHistoryLauncher);
+                        handleVisibilityChange('pet-show-chathistory', !showChatHistoryLauncher, 'chat-history-visibility');
+                    }}
+                >
+                    <span className="switch-label">💬 显示对话历史</span>
+                    <ToggleSwitch
+                        checked={showChatHistoryLauncher}
+                        onChange={() => {
+                            setShowChatHistoryLauncher(!showChatHistoryLauncher);
+                            handleVisibilityChange('pet-show-chathistory', !showChatHistoryLauncher, 'chat-history-visibility');
+                        }}
+                    />
+                </div>
             </div>
 
-            {/* 退出 */}
+            {/* AI 智能对话 */}
+            <div className="section-header">AI 智能对话</div>
+            <div className="settings-card">
+                <div className="switch-item">
+                    <span className="switch-label">🤖 启用 AI 对话</span>
+                    <ToggleSwitch
+                        checked={aiConfig.enabled}
+                        onChange={handleAIEnabledToggle}
+                    />
+                </div>
+                {aiConfig.enabled && (
+                    <div className="ai-config-body">
+                        {/* 提供商选择 */}
+                        <div className="ai-provider-row">
+                            <button
+                                className={`ai-provider-btn ${aiConfig.provider === 'local' ? 'active' : ''}`}
+                                onClick={() => handleAIProviderChange('local')}
+                            >
+                                🏠 本地 Ollama
+                            </button>
+                            <button
+                                className={`ai-provider-btn ${aiConfig.provider === 'third_party' ? 'active' : ''}`}
+                                onClick={() => handleAIProviderChange('third_party')}
+                            >
+                                ☁️ 第三方 API
+                            </button>
+                            <button
+                                className={`ai-provider-btn ${aiConfig.provider === 'claude_cli' ? 'active' : ''}`}
+                                onClick={() => handleAIProviderChange('claude_cli')}
+                            >
+                                💻 Claude CLI
+                            </button>
+                        </div>
+
+                        {/* 本地 Ollama 配置 */}
+                        {aiConfig.provider === 'local' && (
+                            <div className="ai-fields">
+                                <div className="ai-field">
+                                    <label className="ai-label">Ollama 地址</label>
+                                    <input
+                                        type="text"
+                                        className="ai-input"
+                                        value={aiConfig.ollamaUrl}
+                                        onChange={e => handleAIConfigChange('ollamaUrl', e.target.value)}
+                                        placeholder="http://192.168.2.132:11434"
+                                    />
+                                </div>
+                                <div className="ai-field">
+                                    <label className="ai-label">模型</label>
+                                    <div className="ai-input-row">
+                                        {aiDetectedModels.length > 0 ? (
+                                            <select
+                                                className="ai-select"
+                                                value={aiConfig.ollamaModel}
+                                                onChange={e => handleAIConfigChange('ollamaModel', e.target.value)}
+                                            >
+                                                {aiDetectedModels.map(m => (
+                                                    <option key={m} value={m}>{m}</option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                className="ai-input"
+                                                value={aiConfig.ollamaModel}
+                                                onChange={e => handleAIConfigChange('ollamaModel', e.target.value)}
+                                                placeholder="qwen2.5:7b"
+                                            />
+                                        )}
+                                        <button
+                                            className="ai-detect-btn"
+                                            onClick={handleDetectOllama}
+                                            disabled={aiDetecting}
+                                        >
+                                            {aiDetecting ? '检测中...' : '检测'}
+                                        </button>
+                                    </div>
+                                    {aiDetectedModels.length > 0 && (
+                                        <div className="ai-hint">
+                                            已检测到 {aiDetectedModels.length} 个模型
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 第三方 API 配置 */}
+                        {aiConfig.provider === 'third_party' && (
+                            <div className="ai-fields">
+                                <div className="ai-field">
+                                    <label className="ai-label">API 地址</label>
+                                    <input
+                                        type="text"
+                                        className="ai-input"
+                                        value={aiConfig.apiUrl}
+                                        onChange={e => handleAIConfigChange('apiUrl', e.target.value)}
+                                        placeholder="https://api.openai.com/v1"
+                                    />
+                                </div>
+                                <div className="ai-field">
+                                    <label className="ai-label">API Key</label>
+                                    <div className="ai-input-row">
+                                        <input
+                                            type={showApiKey ? 'text' : 'password'}
+                                            className="ai-input"
+                                            value={aiConfig.apiKey}
+                                            onChange={e => handleAIConfigChange('apiKey', e.target.value)}
+                                            placeholder="sk-..."
+                                        />
+                                        <button
+                                            className="ai-toggle-key"
+                                            onClick={() => setShowApiKey(!showApiKey)}
+                                        >
+                                            {showApiKey ? '🙈' : '👁'}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="ai-field">
+                                    <label className="ai-label">模型名称</label>
+                                    <input
+                                        type="text"
+                                        className="ai-input"
+                                        value={aiConfig.model}
+                                        onChange={e => handleAIConfigChange('model', e.target.value)}
+                                        placeholder="gpt-4o-mini"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Claude CLI 配置 */}
+                        {aiConfig.provider === 'claude_cli' && (
+                            <div className="ai-fields">
+                                <div className="ai-field">
+                                    <label className="ai-label">CLI 路径</label>
+                                    <input
+                                        type="text"
+                                        className="ai-input"
+                                        value={aiConfig.claudeCLIPath}
+                                        onChange={e => handleAIConfigChange('claudeCLIPath', e.target.value)}
+                                        placeholder="claude"
+                                    />
+                                </div>
+                                <div className="ai-hint">
+                                    使用本地安装的 Claude Code CLI（已检测到 v2.1.150）
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 测试连接 */}
+                        <button
+                            className="ai-test-btn"
+                            onClick={handleTestAI}
+                            disabled={aiTesting}
+                        >
+                            {aiTesting ? '⏳ 测试中...' : '🔌 测试连接'}
+                        </button>
+                        {aiTestResult && (
+                            <div className={`ai-test-result ${aiTestResult.ok ? 'ok' : 'fail'}`}>
+                                {aiTestResult.ok ? '✅' : '❌'} {aiTestResult.message}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
             <div className="section-header">应用</div>
             <div className="settings-card">
                 <button className="quit-btn" onClick={handleQuit}>

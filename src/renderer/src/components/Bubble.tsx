@@ -9,6 +9,8 @@ export interface BubbleRef {
     showMessage: (message: BubbleMessage) => void;
     hideMessage: () => void;
     showTodoPanel: (tasks: BubbleTaskItem[]) => void;
+    /** 流式更新当前气泡文本（不重建气泡） */
+    updateStreamText: (text: string) => void;
 }
 
 /**
@@ -35,6 +37,10 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
     const [showQuickAdd, setShowQuickAdd] = useState(false);
     const [quickAddText, setQuickAddText] = useState('');
     const quickAddRef = useRef<HTMLInputElement>(null);
+
+    /** 流式文本状态（打字机效果） */
+    const [streamText, setStreamText] = useState<string | null>(null);
+    const isStreamingRef = useRef(false);
 
     /**
      * 处理队列中的下一条消息
@@ -70,6 +76,9 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
      * 显示新消息（加入队列）
      */
     const showMessage = useCallback((message: BubbleMessage) => {
+        // 新消息到达时清掉流式状态
+        isStreamingRef.current = false;
+        setStreamText(null);
         queueRef.current.push(message);
 
         if (!isShowingRef.current) {
@@ -86,6 +95,8 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
             timerRef.current = null;
         }
         isShowingRef.current = false;
+        isStreamingRef.current = false;
+        setStreamText(null);
         setCurrentMessage(null);
         setLocalTasks([]);
         queueRef.current = [];
@@ -109,8 +120,26 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
         queueRef.current = [];
         if (timerRef.current) clearTimeout(timerRef.current);
         isShowingRef.current = true;
+        isStreamingRef.current = false;
+        setStreamText(null);
         setCurrentMessage(msg);
         setLocalTasks(tasks);
+    }, []);
+
+    /**
+     * 流式更新当前气泡文本（不重建气泡）
+     * 用于 AI streaming 实时显示
+     */
+    const updateStreamText = useCallback((text: string) => {
+        if (!isShowingRef.current) return;
+        isStreamingRef.current = true;
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        setStreamText(text);
+        // 同步更新 currentMessage.text 以便关闭时显示完整内容
+        setCurrentMessage(prev => prev ? { ...prev, text, duration: 0 } : null);
     }, []);
 
     /**
@@ -119,7 +148,8 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
     useImperativeHandle(ref, () => ({
         showMessage,
         hideMessage,
-        showTodoPanel
+        showTodoPanel,
+        updateStreamText
     }));
 
     /**
@@ -235,7 +265,10 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
                     )}
 
                     {/* 消息文本 */}
-                    <div className="bubble-text">{currentMessage.text}</div>
+                    <div className={`bubble-text ${isStreamingRef.current ? 'streaming' : ''}`}>
+                        {streamText || currentMessage.text}
+                        {isStreamingRef.current && <span className="stream-cursor" />}
+                    </div>
 
                     {/* 内嵌任务列表（todo 气泡） */}
                     {currentMessage.type === 'todo' && localTasks.length > 0 && (

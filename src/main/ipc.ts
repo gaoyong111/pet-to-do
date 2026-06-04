@@ -1,4 +1,5 @@
 import { ipcMain, BrowserWindow, app } from 'electron';
+import { spawn } from 'child_process';
 import { petEventBus, PetState, PetEmotion, BubbleMessage } from './eventBus';
 import { pomodoroTimer, PomodoroConfig } from './tools/pomodoro';
 import { reminderSystem, Reminder } from './tools/reminder';
@@ -302,6 +303,39 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
         petEventBus.showBubble(`好的，${minutes} 分钟后再提醒你 ⏰`, 2500, 'emotion');
         return true;
+    });
+
+    // === Claude CLI 对话 ===
+
+    ipcMain.on('claude-chat', (event, prompt: string, cliPath: string) => {
+        const proc = spawn(cliPath || 'claude', ['-p', '--print', prompt], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            timeout: 30000
+        });
+
+        let fullText = '';
+
+        proc.stdout.on('data', (chunk: Buffer) => {
+            const text = chunk.toString('utf-8');
+            fullText += text;
+            event.sender.send('claude-chat-chunk', fullText);
+        });
+
+        proc.on('close', (code: number | null) => {
+            if (code === 0) {
+                event.sender.send('claude-chat-done', fullText.trim());
+            } else {
+                event.sender.send('claude-chat-error', `Claude CLI 退出 code=${code}`);
+            }
+        });
+
+        proc.on('error', (err: Error) => {
+            event.sender.send('claude-chat-error', `Claude CLI 启动失败: ${err.message}`);
+        });
+
+        proc.stderr.on('data', (chunk: Buffer) => {
+            console.error('[Claude CLI stderr]', chunk.toString('utf-8'));
+        });
     });
 
     // === 事件总线 → 渲染进程转发 ===
