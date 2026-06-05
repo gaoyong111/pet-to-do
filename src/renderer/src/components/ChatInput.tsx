@@ -1,13 +1,15 @@
 /**
  * ChatInput — 右键对话输入框（底部整行）
- * 
- * 替换旧的快捷添加任务，提供：
- *   1. 自由对话 — 接入 AI（在线 streaming / 离线短语池）
+ *
+ *   1. AI 对话 — 流式输出到气泡，上下文来自 useChatStore
  *   2. 内建命令 — /task /remind /todo /help
- *   3. 快捷键 — Enter 发送，Shift+Enter 换行，Escape 关闭
+ *   3. 自然语言意图 — 「帮我记个任务」→ /task
+ *   4. 快捷键 — Enter 发送，Shift+Enter 换行，Escape 关闭
  */
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { getAIChatService, ChatMessage, loadAIConfig } from '../utils/aiChatService';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { getAIChatService, loadAIConfig, ChatAbortedError } from '../utils/aiChatService';
+import { buildAIContext } from '../utils/chatContext';
+import { detectChatIntent } from '../utils/chatIntent';
 import { getRandomDialogue } from '../i18n';
 import { useChatStore } from '../store/useChatStore';
 import './ChatInput.css';
@@ -17,9 +19,9 @@ export interface ChatInputProps {
     onClose: () => void;
     onCommand: (command: string, args: string) => void;
     onBubble: (text: string, type?: 'emotion' | 'info' | 'system') => void;
+    onStreamStart?: () => void;
     onBubbleStream?: (text: string) => void;
-    getHistory?: () => ChatMessage[];
-    addToHistory?: (msg: ChatMessage) => void;
+    onStreamEnd?: (text: string, duration?: number) => void;
 }
 
 const COMMANDS: Array<{ cmd: string; desc: string; usage: string }> = [
@@ -29,6 +31,8 @@ const COMMANDS: Array<{ cmd: string; desc: string; usage: string }> = [
     { cmd: '/help',   desc: '帮助',          usage: '/help' },
 ];
 
+const AI_BUBBLE_DURATION = 8000;
+
 function parseCommand(text: string): { command: string; args: string } | null {
     const trimmed = text.trim();
     if (!trimmed.startsWith('/')) return null;
@@ -36,30 +40,43 @@ function parseCommand(text: string): { command: string; args: string } | null {
     if (spaceIdx === -1) return { command: trimmed.toLowerCase(), args: '' };
     return {
         command: trimmed.slice(0, spaceIdx).toLowerCase(),
-        args: trimmed.slice(spaceIdx + 1).trim()
+        args: trimmed.slice(spaceIdx + 1).trim(),
     };
 }
 
-/** 4 行高度（14px * 1.5 * 4 + padding） */
 const MAX_HEIGHT = 100;
 
 export default function ChatInput({
-    visible, onClose, onCommand, onBubble, onBubbleStream, getHistory, addToHistory,
+    visible, onClose, onCommand, onBubble, onStreamStart, onBubbleStream, onStreamEnd,
 }: ChatInputProps) {
     const [text, setText] = useState('');
     const [loading, setLoading] = useState(false);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const barRef = useRef<HTMLDivElement>(null);
+    const streamTextRef = useRef('');
+
+    const aiEnabled = useMemo(() => {
+        const cfg = loadAIConfig();
+        if (!cfg.enabled) return false;
+        const svc = getAIChatService();
+        svc.setConfig(cfg);
+        return svc.isAvailable();
+    }, [visible]);
+
+    const placeholder = aiEnabled
+        ? '说点什么... Enter 发送（AI 已启用）'
+        : '说点什么... Enter 发送（AI 未启用，/help 查看命令）';
 
     useEffect(() => {
         if (visible) {
+            useChatStore.getState().loadFromStorage();
             setText('');
             setLoading(false);
+            streamTextRef.current = '';
             setTimeout(() => inputRef.current?.focus(), 60);
         }
     }, [visible]);
 
-    // 点击外部关闭
     useEffect(() => {
         if (!visible) return;
         const handler = (e: MouseEvent) => {
@@ -74,7 +91,6 @@ export default function ChatInput({
         };
     }, [visible, onClose]);
 
-    // 自动调整高度
     const autoResize = useCallback(() => {
         const el = inputRef.current;
         if (!el) return;
@@ -82,16 +98,20 @@ export default function ChatInput({
         el.style.height = Math.min(el.scrollHeight, MAX_HEIGHT) + 'px';
     }, []);
 
+    const handleStop = useCallback(() => {
+        getAIChatService().abortChat();
+    }, []);
+
     const handleSend = useCallback(async () => {
         const trimmed = text.trim();
         if (!trimmed || loading) return;
         setText('');
         setLoading(true);
+        streamTextRef.current = '';
 
         try {
             const cmd = parseCommand(trimmed);
             if (cmd) {
-                // 保存命令到历史
                 useChatStore.getState().addMessage({
                     role: 'user', content: trimmed, source: 'command',
                 });
@@ -108,51 +128,70 @@ export default function ChatInput({
                 return;
             }
 
-            const history = getHistory?.() || [];
-            const userMsg: ChatMessage = { role: 'user', content: trimmed };
-            addToHistory?.(userMsg);
+            const intent = detectChatIntent(trimmed);
+            if (intent) {
+                useChatStore.getState().addMessage({
+                    role: 'user', content: trimmed, source: 'command',
+                });
+                onCommand(intent.command, intent.args);
+                return;
+            }
 
-            // 保存用户消息到历史 store
             useChatStore.getState().addMessage({
                 role: 'user', content: trimmed, source: 'ai',
             });
 
             const aiConfig = loadAIConfig();
-            if (aiConfig.enabled) {
-                const aiService = getAIChatService();
-                aiService.setConfig(aiConfig);
-                // 先显示等待状态
-                onBubble('🤔', 'emotion');
+            const aiService = getAIChatService();
+            aiService.setConfig(aiConfig);
+
+            if (aiConfig.enabled && aiService.isAvailable()) {
+                const context = buildAIContext(useChatStore.getState().messages);
+                onStreamStart?.();
+
                 try {
-                    const result = await aiService.chatStream([...history, userMsg], (chunk) => {
+                    const result = await aiService.chatStream(context, (chunk) => {
+                        streamTextRef.current = chunk;
                         onBubbleStream?.(chunk);
                     });
-                    if (result) {
-                        addToHistory?.({ role: 'assistant', content: result });
-                        // 保存 AI 回复到历史 store
+                    if (result?.trim()) {
+                        const finalText = result.trim();
                         useChatStore.getState().addMessage({
-                            role: 'assistant', content: result, source: 'ai',
+                            role: 'assistant', content: finalText, source: 'ai',
                         });
+                        onStreamEnd?.(finalText, AI_BUBBLE_DURATION);
                     } else {
-                        // AI 返回空内容
-                        const phrase = getRandomDialogue('idle') || '唔...不知道该说什么';
-                        onBubble(`🤔 ${phrase}`, 'emotion');
+                        const phrase = getRandomDialogue('chatFallback') || getRandomDialogue('idle') || '唔...';
+                        onStreamEnd?.(phrase, AI_BUBBLE_DURATION);
                         useChatStore.getState().addMessage({
                             role: 'pet', content: phrase, source: 'phrase',
                         });
                     }
                 } catch (aiErr) {
-                    // AI 连接/响应失败 → 显示具体原因 + 回退短语
+                    if (aiErr instanceof ChatAbortedError || (aiErr as Error).message === '已停止生成') {
+                        const partial = streamTextRef.current.trim();
+                        if (partial) {
+                            const stoppedText = `${partial}（已停止）`;
+                            useChatStore.getState().addMessage({
+                                role: 'assistant', content: stoppedText, source: 'ai',
+                            });
+                            onStreamEnd?.(stoppedText, 5000);
+                        } else {
+                            onStreamEnd?.('已停止', 3000);
+                        }
+                        return;
+                    }
                     const reason = (aiErr as Error).message || '连接失败';
                     console.error('[ChatInput] AI 失败:', reason);
-                    const phrase = getRandomDialogue('idle') || '嘛，说点什么好呢...';
-                    onBubble(`${phrase}\n（${reason}）`, 'system');
+                    const phrase = getRandomDialogue('chatFallback') || getRandomDialogue('idle') || '嘛...';
+                    const errText = `${phrase}\n（${reason}）`;
+                    onStreamEnd?.(errText, 5000);
                     useChatStore.getState().addMessage({
                         role: 'pet', content: `${phrase}（${reason}）`, source: 'system',
                     });
                 }
             } else {
-                const phrase = getRandomDialogue('idle') || '嗯嗯...';
+                const phrase = getRandomDialogue('chatFallback') || getRandomDialogue('idle') || '嗯嗯...';
                 onBubble(phrase, 'emotion');
                 useChatStore.getState().addMessage({
                     role: 'pet', content: phrase, source: 'phrase',
@@ -165,7 +204,7 @@ export default function ChatInput({
             setLoading(false);
             setTimeout(() => inputRef.current?.focus(), 100);
         }
-    }, [text, loading, onCommand, onBubble, onBubbleStream, getHistory, addToHistory]);
+    }, [text, loading, onCommand, onBubble, onStreamStart, onBubbleStream, onStreamEnd]);
 
     const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -179,7 +218,6 @@ export default function ChatInput({
 
     return (
         <div className="chatinput-bar" ref={barRef}>
-            {/* 指令提示 */}
             <div className="chatinput-hints">
                 {COMMANDS.map(c => (
                     <span
@@ -191,9 +229,11 @@ export default function ChatInput({
                         {c.cmd}
                     </span>
                 ))}
+                <span className={`chatinput-ai-badge ${aiEnabled ? 'on' : 'off'}`}>
+                    {aiEnabled ? 'AI' : '离线'}
+                </span>
             </div>
 
-            {/* 输入行 */}
             <div className="chatinput-input-row">
                 <textarea
                     ref={inputRef}
@@ -201,17 +241,27 @@ export default function ChatInput({
                     value={text}
                     onChange={e => { setText(e.target.value); autoResize(); }}
                     onKeyDown={handleKeyDown}
-                    placeholder="说点什么... Enter 发送"
+                    placeholder={placeholder}
                     rows={1}
                     disabled={loading}
                 />
-                <button
-                    className={`chatinput-send ${loading ? 'loading' : ''}`}
-                    onClick={handleSend}
-                    disabled={loading || !text.trim()}
-                >
-                    {loading ? '…' : '↑'}
-                </button>
+                {loading ? (
+                    <button
+                        className="chatinput-stop"
+                        onClick={handleStop}
+                        title="停止生成"
+                    >
+                        ■
+                    </button>
+                ) : (
+                    <button
+                        className="chatinput-send"
+                        onClick={handleSend}
+                        disabled={!text.trim()}
+                    >
+                        ↑
+                    </button>
+                )}
             </div>
         </div>
     );

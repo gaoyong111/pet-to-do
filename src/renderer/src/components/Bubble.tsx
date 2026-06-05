@@ -1,6 +1,16 @@
-import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useImperativeHandle, forwardRef, useMemo } from 'react';
 import { BubbleMessage, BubbleTaskItem } from '../types';
+import { bubbleStyleToCssVars, loadBubbleStyle } from '../utils/bubbleStyle';
+import { getSkinBubblePositionAdjust } from '../utils/skinLayoutOverride';
+import type { PetVisualBounds } from '../utils/skinLayout';
 import './Bubble.css';
+
+export interface BubbleProps {
+    /** 角色可视区域（画布坐标），用于动态定位 */
+    petAnchor?: PetVisualBounds | null;
+    skinId?: string;
+    styleVersion?: number;
+}
 
 /**
  * 气泡组件暴露的方法
@@ -9,15 +19,23 @@ export interface BubbleRef {
     showMessage: (message: BubbleMessage) => void;
     hideMessage: () => void;
     showTodoPanel: (tasks: BubbleTaskItem[]) => void;
+    /** 开始 AI 流式气泡（duration=0，不自动消失） */
+    startStream: (type?: BubbleMessage['type']) => void;
     /** 流式更新当前气泡文本（不重建气泡） */
     updateStreamText: (text: string) => void;
+    /** 结束流式并设置自动消失时长（默认 8 秒） */
+    finalizeStream: (finalText: string, duration?: number) => void;
 }
 
 /**
  * 气泡组件
  * 支持：普通文字气泡、提醒气泡（带操作按钮）、今日任务卡片气泡
  */
-const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
+const Bubble = forwardRef<BubbleRef, BubbleProps>(({
+    petAnchor = null,
+    skinId = '',
+    styleVersion = 0,
+}, ref): JSX.Element => {
     /** 当前显示的消息 */
     const [currentMessage, setCurrentMessage] = useState<BubbleMessage | null>(null);
 
@@ -40,7 +58,7 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
 
     /** 流式文本状态（打字机效果） */
     const [streamText, setStreamText] = useState<string | null>(null);
-    const isStreamingRef = useRef(false);
+    const [isStreaming, setIsStreaming] = useState(false);
 
     /**
      * 处理队列中的下一条消息
@@ -76,8 +94,7 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
      * 显示新消息（加入队列）
      */
     const showMessage = useCallback((message: BubbleMessage) => {
-        // 新消息到达时清掉流式状态
-        isStreamingRef.current = false;
+        setIsStreaming(false);
         setStreamText(null);
         queueRef.current.push(message);
 
@@ -95,7 +112,7 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
             timerRef.current = null;
         }
         isShowingRef.current = false;
-        isStreamingRef.current = false;
+        setIsStreaming(false);
         setStreamText(null);
         setCurrentMessage(null);
         setLocalTasks([]);
@@ -120,10 +137,25 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
         queueRef.current = [];
         if (timerRef.current) clearTimeout(timerRef.current);
         isShowingRef.current = true;
-        isStreamingRef.current = false;
+        setIsStreaming(false);
         setStreamText(null);
         setCurrentMessage(msg);
         setLocalTasks(tasks);
+    }, []);
+
+    /**
+     * 开始 AI 流式气泡
+     */
+    const startStream = useCallback((type: BubbleMessage['type'] = 'emotion') => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        queueRef.current = [];
+        isShowingRef.current = true;
+        setIsStreaming(true);
+        setStreamText('…');
+        setCurrentMessage({ text: '…', duration: 0, type });
     }, []);
 
     /**
@@ -132,15 +164,33 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
      */
     const updateStreamText = useCallback((text: string) => {
         if (!isShowingRef.current) return;
-        isStreamingRef.current = true;
+        setIsStreaming(true);
         if (timerRef.current) {
             clearTimeout(timerRef.current);
             timerRef.current = null;
         }
         setStreamText(text);
-        // 同步更新 currentMessage.text 以便关闭时显示完整内容
         setCurrentMessage(prev => prev ? { ...prev, text, duration: 0 } : null);
     }, []);
+
+    /**
+     * 结束流式输出，并启动自动消失计时
+     */
+    const finalizeStream = useCallback((finalText: string, duration = 8000) => {
+        setIsStreaming(false);
+        setStreamText(null);
+        setCurrentMessage(prev => prev ? { ...prev, text: finalText, duration } : null);
+
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        if (duration > 0) {
+            timerRef.current = setTimeout(() => {
+                processQueue();
+            }, duration);
+        }
+    }, [processQueue]);
 
     /**
      * 暴露方法给父组件
@@ -149,7 +199,9 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
         showMessage,
         hideMessage,
         showTodoPanel,
-        updateStreamText
+        startStream,
+        updateStreamText,
+        finalizeStream,
     }));
 
     /**
@@ -242,8 +294,46 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
         };
     }, []);
 
-    /** 气泡类型对应的样式类名 */
     const typeClass = currentMessage ? `bubble-${currentMessage.type}` : '';
+    const isElevated = currentMessage?.type === 'todo'
+        || !!currentMessage?.tasks?.length
+        || !!currentMessage?.actions?.length;
+
+    const bubbleStyle = useMemo(() => loadBubbleStyle(), [styleVersion]);
+    const skinPos = useMemo(() => getSkinBubblePositionAdjust(skinId), [skinId, styleVersion]);
+
+    const containerStyle = useMemo(() => {
+        const gap = skinPos.gapAboveHead ?? bubbleStyle.gapAboveHead;
+        const ox = bubbleStyle.offsetX + skinPos.offsetX;
+        const oy = bubbleStyle.offsetY + skinPos.offsetY;
+
+        if (petAnchor) {
+            return {
+                left: petAnchor.centerX + ox,
+                top: petAnchor.headTop - gap + oy,
+            } as React.CSSProperties;
+        }
+
+        return {
+            left: `calc(50% + ${ox}px)`,
+            top: 36 + oy,
+        } as React.CSSProperties;
+    }, [petAnchor, bubbleStyle, skinPos]);
+
+    const cssVars = useMemo(() => bubbleStyleToCssVars(bubbleStyle), [bubbleStyle]);
+
+    const containerClass = [
+        'bubble-container',
+        currentMessage ? 'bubble-visible' : '',
+        isElevated ? 'bubble-elevated' : '',
+        bubbleStyle.enableFloat ? 'bubble-float-enabled' : '',
+    ].filter(Boolean).join(' ');
+
+    const bubbleClass = [
+        'bubble',
+        typeClass,
+        bubbleStyle.showTail ? '' : 'bubble-no-tail',
+    ].filter(Boolean).join(' ');
 
     /** 普通气泡点击关闭（只对无 actions 且无 tasks 的生效） */
     const handleBubbleClick = useCallback(() => {
@@ -253,10 +343,13 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
     }, [currentMessage, hideMessage]);
 
     return (
-        <div className={`bubble-container ${currentMessage ? 'bubble-visible' : ''}`}>
+        <div
+            className={containerClass}
+            style={{ ...containerStyle, ...cssVars }}
+        >
             {currentMessage && (
                 <div
-                    className={`bubble ${typeClass}`}
+                    className={bubbleClass}
                     onClick={handleBubbleClick}
                 >
                     {/* 关闭按钮（有 actions 或 tasks 时显示） */}
@@ -265,9 +358,9 @@ const Bubble = forwardRef<BubbleRef>((_, ref): JSX.Element => {
                     )}
 
                     {/* 消息文本 */}
-                    <div className={`bubble-text ${isStreamingRef.current ? 'streaming' : ''}`}>
-                        {streamText || currentMessage.text}
-                        {isStreamingRef.current && <span className="stream-cursor" />}
+                    <div className={`bubble-text ${isStreaming ? 'streaming' : ''}`}>
+                        {streamText ?? currentMessage.text}
+                        {isStreaming && <span className="stream-cursor" />}
                     </div>
 
                     {/* 内嵌任务列表（todo 气泡） */}

@@ -1,0 +1,97 @@
+.bubble-customize-panel {
+  max-width: 440px;
+}
+
+.bubble-customize-body {
+  max-height: min(62vh, 520px);
+}
+
+.bubble-preview-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 4px;
+}
+
+.bubble-preview {
+  position: relative;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  word-break: break-word;
+}
+
+.bubble-preview-tail {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid;
+}
+
+.bubble-theme-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.bubble-align-row {
+  display: flex;
+  gap: 6px;
+}
+
+.bubble-align-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: 1px solid #d5d9e3;
+  border-radius: 6px;
+  background: #f8f9fb;
+  color: #555b6a;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bubble-align-btn.active {
+  background: #444860;
+  border-color: #444860;
+  color: #fff;
+  font-weight: 600;
+}
+
+.bubble-toggle-inline {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+}
+
+.bubble-color-group {
+  margin-bottom: 8px;
+}
+
+.bubble-color-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.bubble-color-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: #868b98;
+}
+
+.bubble-color-field input[type='color'] {
+  width: 100%;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid #d5d9e3;
+  border-radius: 6px;
+  cursor: pointer;
+  background: #fff;
+}

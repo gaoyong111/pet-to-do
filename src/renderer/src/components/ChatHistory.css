@@ -103,6 +103,40 @@
   color: #333;
 }
 
+/* 来源筛选 */
+.chathistory-filters {
+  display: flex;
+  gap: 6px;
+  padding: 8px 14px 4px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.chathistory-filter-btn {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+  color: #666;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.chathistory-filter-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #333;
+}
+
+.chathistory-filter-btn.active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #2563eb;
+  font-weight: 600;
+}
+
 /* 消息列表 */
 .chathistory-list {
   flex: 1;
@@ -177,6 +211,26 @@
   min-width: 0;
 }
 
+.chathistory-msg-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.chathistory-source {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  line-height: 1.4;
+}
+
+.chathistory-source--ai { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.chathistory-source--command { background: rgba(168, 85, 247, 0.12); color: #7c3aed; }
+.chathistory-source--phrase { background: rgba(234, 179, 8, 0.15); color: #b45309; }
+.chathistory-source--system { background: rgba(0, 0, 0, 0.06); color: #666; }
+
 .chathistory-msg-content {
   font-size: 12.5px;
   line-height: 1.5;
@@ -190,6 +244,10 @@
 .chathistory-msg--user {
   flex-direction: row-reverse;
 }
+.chathistory-msg--user .chathistory-msg-meta {
+  flex-direction: row-reverse;
+}
+
 .chathistory-msg--user .chathistory-msg-content {
   background: rgba(59, 130, 246, 0.08);
   border-radius: 10px 4px 10px 10px;
@@ -210,6 +268,107 @@
 .chathistory-msg-time {
   font-size: 10px;
   color: #bbb;
-  margin-top: 3px;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* 消息操作 */
+.chathistory-msg-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.chathistory-msg:hover .chathistory-msg-actions {
+  opacity: 1;
+}
+
+.chathistory-action-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.chathistory-action-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
+.chathistory-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chathistory-action-btn--muted {
+  color: #888;
+}
+
+.chathistory-action-btn--danger:hover:not(:disabled) {
+  background: rgba(232, 64, 64, 0.08);
+  border-color: rgba(232, 64, 64, 0.25);
+  color: #e84040;
+}
+
+.chathistory-edited-badge {
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(234, 179, 8, 0.15);
+  color: #b45309;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.chathistory-original-content {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 4px;
+  line-height: 1.4;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.chathistory-edit-box {
+  margin-top: 4px;
+}
+
+.chathistory-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  resize: vertical;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  outline: none;
+}
+
+.chathistory-edit-input:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.chathistory-edit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.chathistory-edit-hint {
+  font-size: 10px;
+  color: #aaa;
+  margin-top: 4px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.chathistory-msg--loading {
+  opacity: 0.7;
 }

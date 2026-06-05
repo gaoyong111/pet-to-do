@@ -51,15 +51,18 @@ const DEFAULT_PERIODS: TimePeriod[] = [
     }
 ];
 
+/** 是否启用时段自动状态/气泡（默认关；待状态机优先级设计后再开） */
+export const TIME_SENSOR_ENABLED = false;
+
 /** 检查间隔（毫秒） */
 const CHECK_INTERVAL = 60_000;
 
 /**
  * 时间感知模块
- * 根据当前时间段自动切换桌宠状态和气泡
  *
- * 参考 clawd-on-desk 的事件驱动模式：
- * 时间变化 → 事件总线 → 状态切换 + 气泡消息
+ * 设计：按时间段切换桌宠状态 + 问候气泡。
+ * 当前默认关闭——定时对话由 renderer `dialogueSystem` 的 DAILY_SCHEDULE 负责，
+ * 状态切换待状态机优先级（番茄钟 / 手动 / 时段）设计完成后再启用。
  */
 class TimeSensor {
     /** 时间段配置 */
@@ -84,6 +87,7 @@ class TimeSensor {
      * 立即检查一次，然后每分钟检查一次
      */
     start(): void {
+        if (!TIME_SENSOR_ENABLED) return;
         if (this.timer) return;
 
         this.check();

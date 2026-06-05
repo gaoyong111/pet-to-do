@@ -1,5 +1,22 @@
+import { app } from 'electron';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
+
+/**
+ * 解析皮肤目录路径
+ * 打包后 public/skins → out/renderer/skins；开发时回退到源码目录
+ */
+export function resolveSkinsDir(): string {
+  const builtDir = join(__dirname, '../renderer/skins');
+  if (existsSync(builtDir)) {
+    return builtDir;
+  }
+  const sourceDir = join(app.getAppPath(), 'src/renderer/public/skins');
+  if (existsSync(sourceDir)) {
+    return sourceDir;
+  }
+  return builtDir;
+}
 
 /** 皮肤清单接口 */
 export interface SkinManifest {
@@ -250,7 +267,6 @@ class SkinLoader {
     const groupNames: Record<string, string> = {
       'cubism': 'Cubism SDK',
       'anime': '二次元',
-      'azurlane': '碧蓝航线',
       'girlsfrontline': '少女前线'
     };
     return groupNames[groupId] || groupId;

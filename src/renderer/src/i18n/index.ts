@@ -5,6 +5,7 @@
 import zhCN from './locales/zh-CN';
 import enUS from './locales/en-US';
 import jaJP from './locales/ja-JP';
+import { getCharacterPhrase, getCharacterGreeting } from '../character/characterPhrases';
 
 /** 语言类型 */
 export type Locale = 'zh-CN' | 'en-US' | 'ja-JP';
@@ -108,9 +109,12 @@ export function t(path: string, params?: Record<string, string | number>): strin
 
 /**
  * 获取随机对话
- * 如果指定的 category 不存在，fallback 到 'idle'
+ * 优先本地角色卡短语池（.local/natori.phrases.json），否则走 i18n
  */
 export function getRandomDialogue(category: string): string {
+    const fromCharacter = getCharacterPhrase(category, currentLocale);
+    if (fromCharacter) return fromCharacter;
+
     const dialogues = locales[currentLocale].dialogue as any;
     const path = category.split('.');
     let value: any = dialogues;
@@ -119,7 +123,11 @@ export function getRandomDialogue(category: string): string {
         if (value && typeof value === 'object' && key in value) {
             value = value[key];
         } else {
-            // fallback 到 idle
+            const charFallback =
+                getCharacterPhrase(category, currentLocale) ||
+                getCharacterPhrase('chatFallback', currentLocale) ||
+                getCharacterPhrase('idle', currentLocale);
+            if (charFallback) return charFallback;
             const fallback = (dialogues as any)?.idle;
             if (Array.isArray(fallback) && fallback.length > 0) {
                 return fallback[Math.floor(Math.random() * fallback.length)];
@@ -141,18 +149,25 @@ export function getRandomDialogue(category: string): string {
 export function getGreeting(): string {
     const hour = new Date().getHours();
     const greetings = locales[currentLocale].greeting;
-    
+
+    let period: 'morning' | 'noon' | 'afternoon' | 'evening' | 'night';
     if (hour >= 5 && hour < 12) {
-        return greetings.morning[Math.floor(Math.random() * greetings.morning.length)];
+        period = 'morning';
     } else if (hour >= 12 && hour < 14) {
-        return greetings.noon[Math.floor(Math.random() * greetings.noon.length)];
+        period = 'noon';
     } else if (hour >= 14 && hour < 18) {
-        return greetings.afternoon[Math.floor(Math.random() * greetings.afternoon.length)];
+        period = 'afternoon';
     } else if (hour >= 18 && hour < 22) {
-        return greetings.evening[Math.floor(Math.random() * greetings.evening.length)];
+        period = 'evening';
     } else {
-        return greetings.night[Math.floor(Math.random() * greetings.night.length)];
+        period = 'night';
     }
+
+    const fromCharacter = getCharacterGreeting(period, currentLocale);
+    if (fromCharacter) return fromCharacter;
+
+    const pool = greetings[period];
+    return pool[Math.floor(Math.random() * pool.length)];
 }
 
 /**

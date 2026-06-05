@@ -25,6 +25,7 @@
     gap: 4px;
     margin-bottom: 6px;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .chatinput-hint {
@@ -42,6 +43,25 @@
 .chatinput-hint:hover {
     background: #e0e0f0;
     color: #555;
+}
+
+.chatinput-ai-badge {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    line-height: 1.6;
+    font-weight: 600;
+}
+
+.chatinput-ai-badge.on {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.chatinput-ai-badge.off {
+    background: #f5f5f5;
+    color: #999;
 }
 
 /* ===================== 输入行 ===================== */
@@ -122,6 +142,26 @@
 
 .chatinput-send.loading {
     animation: dotPulse 1s steps(1) infinite;
+}
+
+.chatinput-stop {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: #e84040;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+
+.chatinput-stop:hover {
+    background: #d63030;
 }
 
 @keyframes dotPulse {

@@ -5,6 +5,10 @@
   align-items: flex-end;
 }
 
+.todolauncher-container.menu-open {
+  z-index: 50;
+}
+
 .todolauncher-toggle {
   width: 40px;
   height: 40px;
@@ -44,22 +48,24 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-/* 右键菜单 */
+/* 右键菜单：向左展开，避免被下方消息图标遮挡 */
 .todolauncher-menu {
   position: absolute;
-  top: 44px;
-  right: 0;
+  top: 0;
+  right: calc(100% + 8px);
+  left: auto;
   min-width: 140px;
   background: #fff;
   border-radius: 10px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
   overflow: hidden;
   animation: menuIn 0.15s ease;
+  z-index: 200;
 }
 
 @keyframes menuIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateX(4px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 .todolauncher-menu-title {

@@ -1,14 +1,16 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { initCharacter } from './character/characterPhrases';
 import './App.css';
 
-/**
- * React 应用入口
- * 挂载根组件到 DOM
- */
-ReactDOM.createRoot(document.getElementById('root')!).render(
-    <React.StrictMode>
-        <App />
-    </React.StrictMode>
-);
+async function bootstrap(): Promise<void> {
+    await initCharacter();
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+        <React.StrictMode>
+            <App />
+        </React.StrictMode>
+    );
+}
+
+bootstrap();

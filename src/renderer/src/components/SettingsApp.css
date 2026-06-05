@@ -299,6 +299,26 @@
     border-color: #6b8cff;
 }
 
+.ai-textarea {
+    width: 100%;
+    padding: 6px 10px;
+    font-size: 12px;
+    border: 1px solid #d0d0d8;
+    border-radius: 6px;
+    outline: none;
+    background: #fff;
+    color: #333;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 56px;
+    line-height: 1.5;
+    box-sizing: border-box;
+}
+
+.ai-textarea:focus {
+    border-color: #6b8cff;
+}
+
 .ai-select {
     flex: 1;
     padding: 6px 10px;
@@ -343,6 +363,14 @@
     font-size: 10px;
     color: #868b98;
     margin-top: 2px;
+}
+
+.ai-hint--ok {
+    color: #2e7d32;
+}
+
+.ai-hint--error {
+    color: #c62828;
 }
 
 .ai-test-btn {

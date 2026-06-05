@@ -23,14 +23,6 @@ contextBridge.exposeInMainWorld('petAPI', {
     },
 
     /**
-     * 触发宠物交互
-     * @param action - 交互类型：'pat'（摸头）或 'poke'（戳）
-     */
-    petInteract: (action: string): Promise<void> => {
-        return ipcRenderer.invoke('pet-interact', action);
-    },
-
-    /**
      * 移动窗口位置
      * @param deltaX - X 轴移动像素
      * @param deltaY - Y 轴移动像素
@@ -442,6 +434,7 @@ contextBridge.exposeInMainWorld('petAPI', {
                 ipcRenderer.removeListener('claude-chat-chunk', chunkHandler);
                 ipcRenderer.removeListener('claude-chat-done', doneHandler);
                 ipcRenderer.removeListener('claude-chat-error', errorHandler);
+                ipcRenderer.removeListener('claude-chat-aborted', abortHandler);
             };
             const timer = setTimeout(() => {
                 if (!settled) { settled = true; cleanup(); reject(new Error('Claude CLI 无响应（35秒超时），请确认已重启应用')); }
@@ -455,10 +448,23 @@ contextBridge.exposeInMainWorld('petAPI', {
             const errorHandler = (_event: Electron.IpcRendererEvent, msg: string) => {
                 if (!settled) { settled = true; cleanup(); reject(new Error(msg)); }
             };
+            const abortHandler = () => {
+                if (!settled) { settled = true; cleanup(); reject(new Error('已停止生成')); }
+            };
             if (onChunk) ipcRenderer.on('claude-chat-chunk', chunkHandler);
             ipcRenderer.once('claude-chat-done', doneHandler);
             ipcRenderer.once('claude-chat-error', errorHandler);
+            ipcRenderer.once('claude-chat-aborted', abortHandler);
             ipcRenderer.send('claude-chat', prompt, cliPath || 'claude');
         });
     },
+    claudeChatAbort: (): void => {
+        ipcRenderer.send('claude-chat-abort');
+    },
+
+    getCharacterBundle: (): Promise<{
+        systemPrompt: string | null;
+        phrases: Record<string, unknown> | null;
+        sourceDir: string | null;
+    }> => ipcRenderer.invoke('character-get-bundle'),
   });

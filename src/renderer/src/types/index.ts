@@ -114,6 +114,11 @@ export interface SkinManifest {
         entry: string;
         scale: number;
         anchor: [number, number];
+        offsetX?: number;
+        offsetY?: number;
+    };
+    layout?: {
+        fill?: number;
     };
     /** 皮肤尺寸 */
     size: {
@@ -172,7 +177,6 @@ export interface SkinConfig {
 export interface PetAPI {
     getPetState: () => Promise<string>;
     setPetState: (state: string) => Promise<string>;
-    petInteract: (action: string) => Promise<void>;
     moveWindow: (deltaX: number, deltaY: number) => Promise<void>;
     quitApp: () => Promise<void>;
     // 情绪相关方法
@@ -236,6 +240,16 @@ export interface PetAPI {
     msTodoPushLocal: (localTasks: any[], msListId: string) => Promise<{ success: number; failed: number; results: any[]; error?: string }>;
     // Claude CLI
     claudeChat: (prompt: string, cliPath: string, onChunk?: (text: string) => void) => Promise<string>;
+    claudeChatAbort: () => void;
+    getCharacterBundle: () => Promise<{
+        systemPrompt: string | null;
+        phrases: {
+            locale: string;
+            greeting?: Record<string, string[]>;
+            dialogue?: Record<string, unknown>;
+        } | null;
+        sourceDir: string | null;
+    }>;
     onStateChange: (callback: (newState: string) => void) => () => void;
     onEmotionChange: (callback: (emotion: string) => void) => () => void;
     onShowBubble: (callback: (message: BubbleMessage) => void) => () => void;
@@ -267,6 +281,10 @@ export interface AIConfig {
     model: string;
     // Claude CLI
     claudeCLIPath: string;
+    /** 自定义 system 提示词（空则用默认） */
+    systemPrompt: string;
+    /** 请求超时（毫秒），0 表示用提供商默认值 */
+    timeoutMs: number;
     // 通用
     enabled: boolean;
 }
@@ -274,11 +292,13 @@ export interface AIConfig {
 /** AI 配置默认值 */
 export const DEFAULT_AI_CONFIG: AIConfig = {
     provider: 'local',
-    ollamaUrl: 'http://192.168.2.132:11434',
+    ollamaUrl: 'http://127.0.0.1:11434',
     ollamaModel: 'qwen2.5:7b',
     apiUrl: 'https://api.openai.com/v1',
     apiKey: '',
     model: 'gpt-4o-mini',
     claudeCLIPath: 'claude',
+    systemPrompt: '',
+    timeoutMs: 0,
     enabled: false,
 };

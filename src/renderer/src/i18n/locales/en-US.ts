@@ -119,6 +119,39 @@ export default {
             'Tickles!',
             'Hehe~'
         ],
+        reaction: {
+            pat: [
+                'Hehe~ so nice',
+                'Pat me again~',
+                'Your hands are warm',
+                'Ehehe...',
+                'I like this!'
+            ],
+            poke: [
+                'Hey!',
+                'Stop poking!',
+                'Hmph, sneak attack!',
+                'That tickles...',
+                'Okay okay~'
+            ],
+            tap: [
+                'Ah!',
+                'What is it~',
+                'Why touch me~'
+            ]
+        },
+        schedule: {
+            lunch: [
+                'Lunch time! Don\'t skip your meal~',
+                'Take a break and eat something~',
+                'Midday break — fuel up!'
+            ],
+            offWork: [
+                'Work\'s done for today~',
+                'Six o\'clock — time to relax!',
+                'You did great today!'
+            ]
+        },
         health: {
             drink: [
                 'Time to drink water!',

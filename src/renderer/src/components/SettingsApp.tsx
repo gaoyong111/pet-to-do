@@ -2,54 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { getLocale, setLocale, subscribeLocaleChange, getAvailableLocales, Locale, t } from '../i18n';
 import { AIConfig, AIProvider, DEFAULT_AI_CONFIG } from '../types';
 import { loadAIConfig, saveAIConfig, getAIChatService } from '../utils/aiChatService';
+import { DEFAULT_SYSTEM_PROMPT } from '../utils/systemPrompt';
+import { getCharacterSourceHint, getCharacterSystemPrompt } from '../character/characterPhrases';
+import { SKIN_GROUPS } from '../constants/skinGroups';
+import { loadSkinPreference, saveSkinPreference } from '../utils/skinPreference';
+import ViewCustomizePanel from './ViewCustomizePanel';
+import BubbleCustomizePanel from './BubbleCustomizePanel';
 import './SettingsApp.css';
-
-interface SkinGroup {
-    id: string;
-    name: string;
-    skins: Array<{ id: string; name: string }>;
-}
-
-const SKIN_GROUPS: SkinGroup[] = [
-    {
-        id: 'cubism',
-        name: 'Cubism SDK',
-        skins: [
-            { id: 'cubism-Hiyori', name: 'Hiyori' },
-            { id: 'cubism-Mao', name: 'Mao' },
-            { id: 'cubism-Mark', name: 'Mark' },
-            { id: 'cubism-Natori', name: 'Natori' },
-            { id: 'cubism-Ren', name: 'Ren' },
-            { id: 'cubism-Rice', name: 'Rice' },
-            { id: 'cubism-Wanko', name: 'Wanko' },
-            { id: 'cubism-haru', name: 'Haru' }
-        ]
-    },
-    {
-        id: 'azurlane',
-        name: '碧蓝航线',
-        skins: [
-            { id: 'azurlane-z23', name: 'Z23' },
-            { id: 'azurlane-z46', name: 'Z46' },
-            { id: 'azurlane-lafei', name: '拉菲' },
-            { id: 'azurlane-lingbo', name: '凌波' },
-            { id: 'azurlane-mingshi', name: '明石' },
-            { id: 'azurlane-jian3', name: '剑三' },
-            { id: 'azurlane-z13', name: 'Z13' }
-        ]
-    },
-    {
-        id: 'girlsfrontline',
-        name: '少女前线',
-        skins: [
-            { id: 'girlsfrontline-armor1', name: 'Armor1' },
-            { id: 'girlsfrontline-command1', name: 'Command1' },
-            { id: 'girlsfrontline-golden1', name: 'Golden1' },
-            { id: 'girlsfrontline-shield1', name: 'Shield1' },
-            { id: 'girlsfrontline-target1', name: 'Target1' }
-        ]
-    },
-];
 
 /** 从当前皮肤 manifest 动态加载支持的状态/反应/文案 */
 async function loadSkinCapabilities(skinId: string): Promise<{
@@ -73,8 +32,9 @@ async function loadSkinCapabilities(skinId: string): Promise<{
 
 function SettingsApp(): JSX.Element {
     const [currentLocale, setCurrentLocale] = useState<Locale>(getLocale());
-    const [currentGroup, setCurrentGroup] = useState(() => localStorage.getItem('pet-skin-group') || 'cubism');
-    const [currentSkin, setCurrentSkin] = useState(() => localStorage.getItem('pet-skin-id') || 'cubism-Hiyori');
+    const initialSkin = loadSkinPreference();
+    const [currentGroup, setCurrentGroup] = useState(initialSkin.groupId);
+    const [currentSkin, setCurrentSkin] = useState(initialSkin.skinId);
     const [currentState, setCurrentState] = useState<string>(() => {
         const saved = localStorage.getItem('pet-current-state');
         return saved || 'idle';
@@ -103,12 +63,16 @@ function SettingsApp(): JSX.Element {
     const [aiConfig, setAiConfig] = useState<AIConfig>(() => loadAIConfig());
     const [aiDetectedModels, setAiDetectedModels] = useState<string[]>([]);
     const [aiDetecting, setAiDetecting] = useState(false);
+    const [aiDetectError, setAiDetectError] = useState<string | null>(null);
     const [aiTesting, setAiTesting] = useState(false);
     const [aiTestResult, setAiTestResult] = useState<{ ok: boolean; message: string } | null>(null);
     const [showApiKey, setShowApiKey] = useState(false);
+    const [showViewCustomize, setShowViewCustomize] = useState(false);
+    const [showBubbleCustomize, setShowBubbleCustomize] = useState(false);
 
     const currentGroupData = SKIN_GROUPS.find(group => group.id === currentGroup);
     const currentSkins = currentGroupData?.skins || [];
+    const currentSkinName = currentSkins.find(s => s.id === currentSkin)?.name ?? currentSkin;
 
     useEffect(() => {
         return subscribeLocaleChange((locale: Locale) => {
@@ -134,18 +98,18 @@ function SettingsApp(): JSX.Element {
         setCurrentGroup(groupId);
         const group = SKIN_GROUPS.find(g => g.id === groupId);
         if (group && group.skins.length > 0) {
-            setCurrentSkin(group.skins[0].id);
-            localStorage.setItem('pet-skin-group', groupId);
-            localStorage.setItem('pet-skin-id', group.skins[0].id);
+            const skinId = group.skins[0].id;
+            setCurrentSkin(skinId);
+            saveSkinPreference(groupId, skinId);
             if (window.petAPI) {
-                window.petAPI.relayToMain('switch-skin', group.skins[0].id);
+                window.petAPI.relayToMain('switch-skin', skinId);
             }
         }
     }, []);
 
     const handleSkinChange = useCallback((skinId: string) => {
         setCurrentSkin(skinId);
-        localStorage.setItem('pet-skin-id', skinId);
+        saveSkinPreference(currentGroup, skinId);
         if (window.petAPI) {
             window.petAPI.relayToMain('switch-skin', skinId);
         }
@@ -202,16 +166,29 @@ function SettingsApp(): JSX.Element {
 
     const handleDetectOllama = useCallback(async () => {
         setAiDetecting(true);
-        setAiDetectedModels([]);
+        setAiDetectError(null);
         try {
             const svc = getAIChatService();
-            const models = await svc.detectOllamaModels(aiConfig.ollamaUrl);
-            setAiDetectedModels(models);
-            if (models.length > 0 && !aiConfig.ollamaModel) {
-                handleAIConfigChange('ollamaModel', models[0]);
+            const result = await svc.detectOllamaModels(aiConfig.ollamaUrl);
+            setAiDetectedModels(result.models);
+
+            if (result.url && result.url !== aiConfig.ollamaUrl) {
+                handleAIConfigChange('ollamaUrl', result.url);
+            }
+
+            if (result.error) {
+                setAiDetectError(result.error);
+            } else if (result.models.length === 0) {
+                setAiDetectError('已连接 Ollama，但没有可用的对话模型');
+            } else {
+                const current = aiConfig.ollamaModel;
+                if (!current || !result.models.includes(current)) {
+                    handleAIConfigChange('ollamaModel', result.models[0]);
+                }
             }
         } catch (err) {
             setAiDetectedModels([]);
+            setAiDetectError((err as Error).message || '检测失败');
         } finally {
             setAiDetecting(false);
         }
@@ -244,12 +221,12 @@ function SettingsApp(): JSX.Element {
         }
     }, [aiConfig]);
 
-    // 初始化时自动检测 Ollama（仅本地模式）
+    // 本地 Ollama 模式下自动检测模型
     useEffect(() => {
-        if (aiConfig.provider === 'local' && aiConfig.enabled) {
+        if (aiConfig.provider === 'local') {
             handleDetectOllama();
         }
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [aiConfig.provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: () => void }) => (
         <div className={`toggle-switch${checked ? ' on' : ''}`} onClick={onChange}>
@@ -321,7 +298,37 @@ function SettingsApp(): JSX.Element {
                         </select>
                     </div>
                 </div>
+                <button
+                    type="button"
+                    className="view-customize-entry"
+                    onClick={() => setShowViewCustomize(true)}
+                >
+                    <span>🎨 视图自定义配置</span>
+                    <span className="view-customize-entry-arrow">›</span>
+                </button>
+                <button
+                    type="button"
+                    className="view-customize-entry"
+                    onClick={() => setShowBubbleCustomize(true)}
+                >
+                    <span>💬 聊天气泡样式</span>
+                    <span className="view-customize-entry-arrow">›</span>
+                </button>
             </div>
+
+            <ViewCustomizePanel
+                open={showViewCustomize}
+                skinId={currentSkin}
+                skinName={currentSkinName}
+                onClose={() => setShowViewCustomize(false)}
+            />
+
+            <BubbleCustomizePanel
+                open={showBubbleCustomize}
+                skinId={currentSkin}
+                skinName={currentSkinName}
+                onClose={() => setShowBubbleCustomize(false)}
+            />
 
             {/* 主界面图标 */}
             <div className="section-header">主界面图标</div>
@@ -436,7 +443,7 @@ function SettingsApp(): JSX.Element {
                                         className="ai-input"
                                         value={aiConfig.ollamaUrl}
                                         onChange={e => handleAIConfigChange('ollamaUrl', e.target.value)}
-                                        placeholder="http://192.168.2.132:11434"
+                                        placeholder="http://127.0.0.1:11434"
                                     />
                                 </div>
                                 <div className="ai-field">
@@ -470,8 +477,13 @@ function SettingsApp(): JSX.Element {
                                         </button>
                                     </div>
                                     {aiDetectedModels.length > 0 && (
-                                        <div className="ai-hint">
-                                            已检测到 {aiDetectedModels.length} 个模型
+                                        <div className="ai-hint ai-hint--ok">
+                                            已检测到 {aiDetectedModels.length} 个对话模型
+                                        </div>
+                                    )}
+                                    {aiDetectError && (
+                                        <div className="ai-hint ai-hint--error">
+                                            {aiDetectError}
                                         </div>
                                     )}
                                 </div>
@@ -541,13 +553,39 @@ function SettingsApp(): JSX.Element {
                             </div>
                         )}
 
+                        {/* 人格提示词（所有提供商共用） */}
+                        <div className="ai-fields">
+                            <div className="ai-field">
+                                <label className="ai-label">人格提示词（System）</label>
+                                <textarea
+                                    className="ai-textarea"
+                                    value={aiConfig.systemPrompt}
+                                    onChange={e => handleAIConfigChange('systemPrompt', e.target.value)}
+                                    placeholder={getCharacterSystemPrompt() || DEFAULT_SYSTEM_PROMPT}
+                                    rows={4}
+                                />
+                                <div className="ai-hint">
+                                    {aiConfig.systemPrompt.trim()
+                                        ? '当前使用下方自定义人格（覆盖角色卡）'
+                                        : getCharacterSystemPrompt()
+                                            ? '留空则使用 .local/natori.modelfile 中的 Natori 人格'
+                                            : '留空则使用默认桌宠人格；可复制 config/character/ 示例到 .local/'}
+                                    {getCharacterSourceHint() && !aiConfig.systemPrompt.trim() && (
+                                        <span className="ai-hint--ok"> · 角色卡已加载</span>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
                         {/* 测试连接 */}
                         <button
                             className="ai-test-btn"
                             onClick={handleTestAI}
                             disabled={aiTesting}
                         >
-                            {aiTesting ? '⏳ 测试中...' : '🔌 测试连接'}
+                            {aiTesting
+                                ? (aiConfig.provider === 'local' ? '⏳ 测试中（首次加载可能较慢）...' : '⏳ 测试中...')
+                                : '🔌 测试连接'}
                         </button>
                         {aiTestResult && (
                             <div className={`ai-test-result ${aiTestResult.ok ? 'ok' : 'fail'}`}>

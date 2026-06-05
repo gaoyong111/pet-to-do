@@ -83,7 +83,7 @@ export const TodoLauncher = () => {
   };
 
   return (
-    <div className="todolauncher-container" ref={containerRef}>
+    <div className={`todolauncher-container${showMenu ? ' menu-open' : ''}`} ref={containerRef}>
       <button
         className="todolauncher-toggle"
         onClick={handleClick}

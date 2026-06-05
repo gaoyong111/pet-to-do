@@ -1,43 +1,53 @@
 /* ===================== 气泡容器 ===================== */
 .bubble-container {
   position: absolute;
-  top: 30px;
-  left: 50%;
-  transform: translateX(-50%);
   z-index: 10;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.28s ease, top 0.22s ease, left 0.22s ease;
+  transform: translate(-50%, -100%);
+  max-width: calc(100% - 24px);
 }
 
 .bubble-visible {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(-50%) translateY(-8px);
+}
+
+.bubble-container.bubble-elevated {
+  z-index: 101;
+  max-width: calc(100% - 48px);
+}
+
+.bubble-container.bubble-float-enabled.bubble-visible {
+  animation: bubbleAnchorFloat 3.2s ease-in-out infinite;
 }
 
 /* ===================== 气泡主体 ===================== */
 .bubble {
-  background: rgba(255, 255, 255, 0.97);
-  border-radius: 16px;
-  padding: 10px 14px 12px;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+  background: var(--bubble-bg, rgba(255, 255, 255, 0.97));
+  border-radius: var(--bubble-radius, 16px);
+  padding: var(--bubble-padding-y, 10px) var(--bubble-padding-x, 14px) calc(var(--bubble-padding-y, 10px) + 2px);
+  box-shadow: var(--bubble-shadow, 0 8px 20px rgba(0, 0, 0, 0.16));
+  backdrop-filter: var(--bubble-backdrop, none);
+  -webkit-backdrop-filter: var(--bubble-backdrop, none);
+  opacity: var(--bubble-opacity, 0.98);
   width: fit-content;
-  min-width: 120px;
+  min-width: 88px;
+  max-width: var(--bubble-max-width, 280px);
   word-wrap: break-word;
   position: relative;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: var(--bubble-border-width, 1px) solid var(--bubble-border, rgba(0, 0, 0, 0.08));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  animation: bubbleFloat 3s ease-in-out infinite;
+  align-items: stretch;
+  text-align: var(--bubble-text-align, center);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-/* 有 actions/tasks 时禁用整体浮动动画，避免按钮难点 */
 .bubble:has(.bubble-actions),
 .bubble:has(.bubble-task-list) {
-  animation: none;
+  animation: none !important;
 }
 
 /* ===================== 关闭按钮 ===================== */
@@ -45,10 +55,10 @@
   position: absolute;
   top: 6px;
   right: 8px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
-  background: rgba(0,0,0,0.08);
+  background: rgba(0, 0, 0, 0.07);
   color: #666;
   border-radius: 50%;
   font-size: 10px;
@@ -59,25 +69,29 @@
   line-height: 1;
   padding: 0;
   transition: background 0.15s;
+  z-index: 1;
 }
+
 .bubble-close:hover {
-  background: rgba(0,0,0,0.18);
+  background: rgba(0, 0, 0, 0.16);
   color: #333;
 }
 
 /* ===================== 气泡文字 ===================== */
 .bubble-text {
-  font-size: 13px;
-  line-height: 1.45;
-  color: #333;
+  font-size: var(--bubble-font-size, 13px);
+  font-weight: var(--bubble-font-weight, 500);
+  line-height: var(--bubble-line-height, 1.5);
+  color: var(--bubble-text-color, #333);
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
   white-space: pre-wrap;
-  text-align: center;
-  max-height: 100px;
+  text-align: inherit;
+  max-height: var(--bubble-max-text-height, 120px);
   overflow-y: auto;
-  scrollbar-width: none;          /* Firefox */
+  scrollbar-width: none;
 }
-.bubble-text::-webkit-scrollbar { /* Chrome/Safari */
+
+.bubble-text::-webkit-scrollbar {
   width: 0;
   background: transparent;
 }
@@ -85,56 +99,58 @@
 /* ===================== 气泡尾巴 ===================== */
 .bubble-tail {
   position: absolute;
-  bottom: -8px;
+  bottom: calc(var(--bubble-tail-size, 9px) * -0.85);
   left: 50%;
   transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 8px solid transparent;
-  border-right: 8px solid transparent;
-  border-top: 8px solid rgba(255, 255, 255, 0.97);
+  border-left: var(--bubble-tail-size, 9px) solid transparent;
+  border-right: var(--bubble-tail-size, 9px) solid transparent;
+  border-top: var(--bubble-tail-size, 9px) solid var(--bubble-bg, rgba(255, 255, 255, 0.97));
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.06));
+}
+
+.bubble-no-tail .bubble-tail {
+  display: none;
 }
 
 /* ===================== 气泡类型样式 ===================== */
 .bubble-emotion {
-  background: rgba(255, 242, 160, 0.97);
-  border-color: rgba(255, 200, 60, 0.25);
+  --bubble-bg: var(--bubble-emotion-bg);
+  --bubble-border: var(--bubble-emotion-border);
+  --bubble-text-color: var(--bubble-emotion-text);
 }
-.bubble-emotion .bubble-tail { border-top-color: rgba(255, 242, 160, 0.97); }
 
 .bubble-info {
-  background: rgba(210, 232, 255, 0.97);
-  border-color: rgba(100, 170, 255, 0.25);
+  --bubble-bg: var(--bubble-info-bg);
+  --bubble-border: var(--bubble-info-border);
+  --bubble-text-color: var(--bubble-info-text);
 }
-.bubble-info .bubble-tail { border-top-color: rgba(210, 232, 255, 0.97); }
 
 .bubble-system {
-  background: rgba(225, 225, 225, 0.97);
-  border-color: rgba(180, 180, 180, 0.25);
+  --bubble-bg: var(--bubble-system-bg);
+  --bubble-border: var(--bubble-system-border);
+  --bubble-text-color: var(--bubble-system-text);
 }
-.bubble-system .bubble-tail { border-top-color: rgba(225, 225, 225, 0.97); }
 
-/* 提醒气泡：橙红色调 */
 .bubble-reminder {
-  background: rgba(255, 236, 210, 0.98);
-  border-color: rgba(255, 150, 50, 0.3);
-  border-width: 1.5px;
-}
-.bubble-reminder .bubble-tail { border-top-color: rgba(255, 236, 210, 0.98); }
-.bubble-reminder .bubble-text {
-  font-weight: 500;
-  color: #8B4000;
+  --bubble-bg: var(--bubble-reminder-bg);
+  --bubble-border: var(--bubble-reminder-border);
+  --bubble-text-color: var(--bubble-reminder-text);
 }
 
-/* 任务气泡：薄荷绿调 */
-.bubble-todo {
-  background: rgba(225, 248, 235, 0.98);
-  border-color: rgba(60, 185, 100, 0.25);
+.bubble-reminder .bubble-text {
+  font-weight: calc(var(--bubble-font-weight, 500) + 50);
 }
-.bubble-todo .bubble-tail { border-top-color: rgba(225, 248, 235, 0.98); }
+
+.bubble-todo {
+  --bubble-bg: var(--bubble-todo-bg);
+  --bubble-border: var(--bubble-todo-border);
+  --bubble-text-color: var(--bubble-todo-text);
+}
+
 .bubble-todo .bubble-text {
-  color: #1a5e36;
-  font-weight: 500;
+  font-weight: calc(var(--bubble-font-weight, 500) + 50);
   margin-bottom: 4px;
 }
 
@@ -151,6 +167,7 @@
 .bubble-task-list::-webkit-scrollbar {
   width: 3px;
 }
+
 .bubble-task-list::-webkit-scrollbar-thumb {
   background: rgba(60, 185, 100, 0.3);
   border-radius: 2px;
@@ -162,14 +179,16 @@
   gap: 6px;
   padding: 5px 7px;
   border-radius: 8px;
-  background: rgba(255,255,255,0.7);
+  background: rgba(255, 255, 255, 0.55);
   cursor: pointer;
   transition: background 0.15s;
   user-select: none;
 }
+
 .bubble-task-item:hover {
-  background: rgba(255,255,255,0.95);
+  background: rgba(255, 255, 255, 0.88);
 }
+
 .bubble-task-item.completed {
   opacity: 0.55;
 }
@@ -180,28 +199,29 @@
   text-align: center;
   color: #3CBB64;
   flex-shrink: 0;
-  transition: transform 0.15s;
 }
+
 .bubble-task-check.checked {
-  transform: scale(1.1);
+  transform: scale(1.08);
 }
 
 .bubble-task-title {
-  font-size: 12px;
-  color: #2a5030;
+  font-size: calc(var(--bubble-font-size, 13px) - 1px);
+  color: inherit;
   flex: 1;
-  line-height: 1.3;
+  line-height: 1.35;
+  text-align: left;
 }
+
 .completed .bubble-task-title {
   text-decoration: line-through;
-  color: #888;
+  opacity: 0.75;
 }
 
 .bubble-task-priority.high {
   font-size: 11px;
   color: #e84040;
   font-weight: bold;
-  flex-shrink: 0;
 }
 
 /* ===================== 快捷添加 ===================== */
@@ -210,32 +230,35 @@
   gap: 5px;
   margin: 6px 0 2px;
 }
+
 .bubble-quick-input {
   flex: 1;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: calc(var(--bubble-font-size, 13px) - 1px);
   border: 1px solid rgba(60, 185, 100, 0.4);
   border-radius: 8px;
   outline: none;
-  background: rgba(255,255,255,0.9);
+  background: rgba(255, 255, 255, 0.9);
   color: #333;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
+
 .bubble-quick-input:focus {
   border-color: #3CBB64;
   box-shadow: 0 0 0 2px rgba(60, 185, 100, 0.15);
 }
+
 .bubble-quick-submit {
   padding: 5px 10px;
-  font-size: 12px;
+  font-size: calc(var(--bubble-font-size, 13px) - 1px);
   background: #3CBB64;
   color: white;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s;
 }
+
 .bubble-quick-submit:hover {
   background: #2da354;
 }
@@ -252,7 +275,7 @@
   flex: 1;
   min-width: 60px;
   padding: 5px 8px;
-  font-size: 12px;
+  font-size: calc(var(--bubble-font-size, 13px) - 1px);
   border: none;
   border-radius: 10px;
   cursor: pointer;
@@ -262,64 +285,56 @@
 }
 
 .bubble-action-primary {
-  background: rgba(255, 150, 50, 0.85);
+  background: rgba(255, 150, 50, 0.88);
   color: white;
 }
+
 .bubble-action-primary:hover {
-  background: rgba(230, 120, 20, 0.9);
+  background: rgba(230, 120, 20, 0.92);
   transform: translateY(-1px);
 }
 
-/* todo 类型的 primary 按钮用绿色 */
 .bubble-todo .bubble-action-primary {
-  background: rgba(60, 185, 100, 0.85);
+  background: rgba(60, 185, 100, 0.88);
 }
+
 .bubble-todo .bubble-action-primary:hover {
-  background: rgba(40, 155, 75, 0.9);
+  background: rgba(40, 155, 75, 0.92);
 }
 
 .bubble-action-secondary {
   background: rgba(0, 0, 0, 0.07);
   color: #555;
 }
+
 .bubble-action-secondary:hover {
   background: rgba(0, 0, 0, 0.13);
-  transform: translateY(-1px);
 }
 
 .bubble-action-danger {
-  background: rgba(220, 50, 50, 0.8);
+  background: rgba(220, 50, 50, 0.85);
   color: white;
 }
-.bubble-action-danger:hover {
-  background: rgba(190, 30, 30, 0.9);
+
+/* ===================== 动画 ===================== */
+@keyframes bubbleAnchorFloat {
+  0%, 100% { transform: translate(-50%, -100%) translateY(0); }
+  50% { transform: translate(-50%, -100%) translateY(calc(var(--bubble-float-amp, 4px) * -1)); }
 }
 
-/* ===================== 浮动动画 ===================== */
-@keyframes bubbleFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
-}
-
-/* ===================== 悬停效果（仅纯文字气泡） ===================== */
 .bubble:not(:has(.bubble-actions)):not(:has(.bubble-task-list)):hover {
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--bubble-shadow-hover, 0 10px 26px rgba(0, 0, 0, 0.2));
   transform: translateY(-2px);
-  transition: all 0.18s ease;
-}
-.bubble:not(:has(.bubble-actions)):not(:has(.bubble-task-list)):active {
-  transform: translateY(0);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
 }
 
-/* ===================== 流式打字光标 ===================== */
+/* ===================== 流式光标 ===================== */
 .stream-cursor {
   display: inline-block;
   width: 2px;
   height: 1em;
-  background: #555;
-  margin-left: 1px;
+  background: currentColor;
+  margin-left: 2px;
   vertical-align: text-bottom;
   animation: blink 0.8s step-end infinite;
 }

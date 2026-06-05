@@ -1,5 +1,6 @@
-import { ipcMain, BrowserWindow, app } from 'electron';
-import { spawn } from 'child_process';
+import { ipcMain, BrowserWindow } from 'electron';
+import { loadCharacterBundle } from './character/loader';
+import { spawn, ChildProcess } from 'child_process';
 import { petEventBus, PetState, PetEmotion, BubbleMessage } from './eventBus';
 import { pomodoroTimer, PomodoroConfig } from './tools/pomodoro';
 import { reminderSystem, Reminder } from './tools/reminder';
@@ -25,6 +26,8 @@ const IPC_CHANNELS = {
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (handlersRegistered) return;
     handlersRegistered = true;
+
+    ipcMain.handle('character-get-bundle', () => loadCharacterBundle());
 
     /**
      * 获取当前桌宠状态
@@ -64,51 +67,6 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
             mainWindow.webContents.send('switch-skin', skinId);
         }
         return true;
-    });
-
-    /**
-     * 触发交互反应（点击宠物时调用）
-     */
-    ipcMain.handle('pet-interact', (_event, action: string) => {
-        switch (action) {
-            case 'pat':
-                petEventBus.playReaction('pat');
-                petEventBus.showBubble('嘿嘿~', 2000, 'emotion');
-                petEventBus.setState('happy');
-                // 3 秒后恢复原状态
-                setTimeout(() => {
-                    petEventBus.setState('idle');
-                }, 3000);
-                break;
-            case 'poke':
-                petEventBus.playReaction('poke');
-                const pokes = ['干嘛！', '别戳我！', '疼！', '哼！'];
-                const msg = pokes[Math.floor(Math.random() * pokes.length)];
-                petEventBus.showBubble(msg, 2000, 'emotion');
-                petEventBus.setState('sad');
-                setTimeout(() => {
-                    petEventBus.setState('idle');
-                }, 3000);
-                break;
-            case 'doubleClick':
-                petEventBus.playReaction('happy');
-                petEventBus.showBubble('主人好喜欢我呀！', 2000, 'emotion');
-                petEventBus.setState('happy');
-                setTimeout(() => {
-                    petEventBus.setState('idle');
-                }, 3000);
-                break;
-            case 'dragStart':
-                petEventBus.playReaction('drag');
-                petEventBus.showBubble('主人要带我去哪里？', 1500, 'emotion');
-                break;
-            case 'dragEnd':
-                petEventBus.playReaction('happy');
-                petEventBus.showBubble('这里好舒服！', 1500, 'emotion');
-                break;
-            default:
-                break;
-        }
     });
 
     /**
@@ -307,11 +265,21 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
 
     // === Claude CLI 对话 ===
 
+    let activeClaudeProc: ChildProcess | null = null;
+    let claudeAbortRequested = false;
+
     ipcMain.on('claude-chat', (event, prompt: string, cliPath: string) => {
+        if (activeClaudeProc) {
+            claudeAbortRequested = true;
+            activeClaudeProc.kill();
+        }
+        claudeAbortRequested = false;
+
         const proc = spawn(cliPath || 'claude', ['-p', '--print', prompt], {
             stdio: ['ignore', 'pipe', 'pipe'],
             timeout: 30000
         });
+        activeClaudeProc = proc;
 
         let fullText = '';
 
@@ -322,6 +290,12 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         });
 
         proc.on('close', (code: number | null) => {
+            activeClaudeProc = null;
+            if (claudeAbortRequested) {
+                claudeAbortRequested = false;
+                event.sender.send('claude-chat-aborted');
+                return;
+            }
             if (code === 0) {
                 event.sender.send('claude-chat-done', fullText.trim());
             } else {
@@ -330,12 +304,25 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         });
 
         proc.on('error', (err: Error) => {
+            activeClaudeProc = null;
+            if (claudeAbortRequested) {
+                claudeAbortRequested = false;
+                event.sender.send('claude-chat-aborted');
+                return;
+            }
             event.sender.send('claude-chat-error', `Claude CLI 启动失败: ${err.message}`);
         });
 
         proc.stderr.on('data', (chunk: Buffer) => {
             console.error('[Claude CLI stderr]', chunk.toString('utf-8'));
         });
+    });
+
+    ipcMain.on('claude-chat-abort', () => {
+        if (activeClaudeProc) {
+            claudeAbortRequested = true;
+            activeClaudeProc.kill();
+        }
     });
 
     // === 事件总线 → 渲染进程转发 ===

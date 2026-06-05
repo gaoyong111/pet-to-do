@@ -24,6 +24,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Local character / modelfile (user-specific, not committed)
+.local/
+
 # Logs
 logs/
 *.log

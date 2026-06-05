@@ -1,10 +1,7 @@
-import { app, BrowserWindow, Menu, MenuItem, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'path';
-import { readdirSync } from 'fs';
 import { registerIpcHandlers } from './ipc';
 import { registerMsTodoIpc } from './tools/msToDoSync';
-import { TimeSensor, TimePeriod } from './sensors/timeSensor';
-import { createSkinLoader } from './skins/skinLoader';
 import { todoSystem } from './tools/todo';
 import { reminderSystem } from './tools/reminder';
 
@@ -50,9 +47,6 @@ export function getChatHistoryWindow(): BrowserWindow | null {
 
 /** 正在退出标志，防止重复退出 */
 let isQuitting = false;
-
-/** 时间感知模块 */
-let timeSensor: TimeSensor | null = null;
 
 /**
  * 创建Todo窗口
@@ -225,8 +219,8 @@ function createMainWindow(): void {
         resizable: true,
         minWidth: 300,
         minHeight: 400,
-        maxWidth: 480,
-        maxHeight: 600,
+        maxWidth: 800,
+        maxHeight: 1000,
         skipTaskbar: true,
         hasShadow: false,
         show: true,
@@ -323,92 +317,7 @@ function createMainWindow(): void {
         return true;
     });
 
-    // 加载皮肤
-    const skinsDir = join(__dirname, '../renderer/skins');
-    const skinLoader = createSkinLoader(skinsDir);
-    const defaultSkin = skinLoader.getDefaultSkin();
-    
-    // 启动时间感知（昼夜节律）
-    let timePeriods: TimePeriod[] | undefined;
-    if (defaultSkin && defaultSkin.config.timePeriods) {
-      timePeriods = defaultSkin.config.timePeriods;
-    }
-    timeSensor = new TimeSensor(timePeriods);
-    timeSensor.start();
-
-    // 创建右键菜单
-    const contextMenu = new Menu();
-    
-    // 设置菜单项
-    contextMenu.append(new MenuItem({
-      label: '设置',
-      click: () => {
-        createSettingsWindow();
-      }
-    }));
-    
-    // 任务管理菜单项
-    contextMenu.append(new MenuItem({
-      label: '任务管理',
-      click: () => {
-        createTodoWindow();
-      }
-    }));
-    
-    // 皮肤菜单项
-    const skinSubmenu = [];
-    
-    // 加载所有可用皮肤
-    try {
-      const skinGroups = skinLoader.loadSkinGroups();
-      
-      skinGroups.forEach(group => {
-        const groupSubmenu = group.skins.map((skin, index) => ({
-          label: skin.manifest.description,
-          checked: index === 0 && group.id === 'cubism',
-          type: 'radio',
-          click: () => {
-            console.log(`切换到皮肤: ${skin.id}`);
-            // 发送IPC消息到渲染进程切换皮肤
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('switch-skin', skin.id);
-            }
-          }
-        }));
-        
-        skinSubmenu.push({
-          label: group.name,
-          submenu: groupSubmenu
-        });
-      });
-    } catch (error) {
-      console.error('加载皮肤列表失败:', error);
-    }
-    
-    contextMenu.append(new MenuItem({
-      label: '皮肤',
-      submenu: skinSubmenu
-    }));
-    
-    // 分隔线
-    contextMenu.append(new MenuItem({ type: 'separator' }));
-    
-    // 退出菜单项
-    contextMenu.append(new MenuItem({
-      label: '退出',
-      click: () => {
-        app.quit();
-      }
-    }));
-    
-    // 监听右键点击事件
-    mainWindow.webContents.on('context-menu', (e, params) => {
-      contextMenu.popup({
-        window: mainWindow,
-        x: params.x,
-        y: params.y
-      });
-    });
+    // 时段状态/气泡：TimeSensor 默认关闭，见 sensors/timeSensor.ts TIME_SENSOR_ENABLED
 
     // 监听窗口关闭事件
     mainWindow.on('close', (event) => {
@@ -445,9 +354,6 @@ app.whenReady().then(() => {
  */
 app.on('before-quit', () => {
     isQuitting = true;
-    if (timeSensor) {
-        timeSensor.stop();
-    }
 });
 
 /**

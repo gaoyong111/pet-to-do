@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PetState, ReminderType } from './types';
+import { PetState } from './types';
 import { StateMachine } from './state/stateMachine';
 import Pet from './components/Pet';
+import type { PetSizeChangePayload } from './components/Live2DPet';
 import Pomodoro from './components/Pomodoro';
 import ReminderApp from './components/ReminderApp';
 import SettingsApp from './components/SettingsApp';
@@ -12,21 +13,21 @@ import { ChatHistoryLauncher } from './components/ChatHistoryLauncher';
 import TodoApp from './components/TodoApp';
 import ErrorBoundary from './components/TodoApp/ErrorBoundary';
 import { TodoLauncher } from './components/TodoLauncher';
-import { ChatMessage } from './utils/aiChatService';
 import { mergeMsTasks } from './components/TodoApp/utils/msSync';
 import { isInTodayView } from './components/TodoApp/utils/taskFilter';
 import { useTodoStore } from './components/TodoApp/store/useTodoStore';
-import { useChatStore } from './store/useChatStore';
+import { useChatStore, initChatStorageSync } from './store/useChatStore';
+import { parseReminderArgs } from './utils/reminderParse';
 import usePetEvents from './hooks/usePetEvents';
 import { getLocale, setLocale, subscribeLocaleChange, Locale, t } from './i18n';
 import { getDialogueManager } from './utils/dialogueSystem';
+import { SKIN_GROUPS } from './constants/skinGroups';
+import { loadSkinPreference, saveSkinPreference, findGroupForSkin } from './utils/skinPreference';
+import { initSkinLayoutSync } from './utils/skinLayoutOverride';
+import { initBubbleStyleSync } from './utils/bubbleStyle';
+import { setWindowScale } from './utils/skinLayout';
+import type { PetVisualBounds } from './utils/skinLayout';
 import './App.css';
-
-interface SkinGroup {
-    id: string;
-    name: string;
-    skins: Array<{ id: string; name: string }>;
-}
 
 function getStateLabels(): Record<string, string> {
     return {
@@ -42,53 +43,12 @@ function getStateLabels(): Record<string, string> {
     };
 }
 
-const SKIN_GROUPS: SkinGroup[] = [
-    {
-        id: 'cubism',
-        name: 'Cubism SDK',
-        skins: [
-            { id: 'cubism-Hiyori', name: 'Hiyori' },
-            { id: 'cubism-Mao', name: 'Mao' },
-            { id: 'cubism-Mark', name: 'Mark' },
-            { id: 'cubism-Natori', name: 'Natori' },
-            { id: 'cubism-Ren', name: 'Ren' },
-            { id: 'cubism-Rice', name: 'Rice' },
-            { id: 'cubism-Wanko', name: 'Wanko' },
-            { id: 'cubism-haru', name: 'Haru' }
-        ]
-    },
-
-    {
-        id: 'azurlane',
-        name: '碧蓝航线',
-        skins: [
-            { id: 'azurlane-z23', name: 'Z23' },
-            { id: 'azurlane-z46', name: 'Z46' },
-            { id: 'azurlane-lafei', name: '拉菲' },
-            { id: 'azurlane-lingbo', name: '凌波' },
-            { id: 'azurlane-mingshi', name: '明石' },
-            { id: 'azurlane-jian3', name: '剑三' },
-            { id: 'azurlane-z13', name: 'Z13' }
-        ]
-    },
-    {
-        id: 'girlsfrontline',
-        name: '少女前线',
-        skins: [
-            { id: 'girlsfrontline-armor1', name: 'Armor1' },
-            { id: 'girlsfrontline-command1', name: 'Command1' },
-            { id: 'girlsfrontline-golden1', name: 'Golden1' },
-            { id: 'girlsfrontline-shield1', name: 'Shield1' },
-            { id: 'girlsfrontline-target1', name: 'Target1' }
-        ]
-    },
-];
-
 function App(): JSX.Element {
+    const initialSkin = loadSkinPreference();
     const [stateMachine] = useState(() => new StateMachine('idle'));
     const [currentState, setCurrentState] = useState<PetState>('idle');
-    const [currentGroup, setCurrentGroup] = useState('cubism');
-    const [currentSkin, setCurrentSkin] = useState('cubism-Hiyori');
+    const [currentGroup, setCurrentGroup] = useState(initialSkin.groupId);
+    const [currentSkin, setCurrentSkin] = useState(initialSkin.skinId);
     const [supportedStates, setSupportedStates] = useState<string[]>(['idle', 'working', 'happy', 'sad', 'sleeping', 'shy', 'angry', 'surprised']);
     const [stateLabels, setStateLabels] = useState<Record<string, string>>(getStateLabels());
     const [currentLocale, setCurrentLocale] = useState<Locale>(getLocale());
@@ -115,14 +75,17 @@ function App(): JSX.Element {
         const saved = localStorage.getItem('pet-show-reminder-badge');
         return saved !== null ? saved === 'true' : true;
     });
-    const [windowSize, setWindowSize] = useState({ width: 640, height: 800 });
+    const [windowSize, setWindowSize] = useState({ width: 400, height: 520 });
+    const windowSizeRef = useRef({ width: 400, height: 520 });
+    const skinBaseSizeRef = useRef({ width: 400, height: 520 });
+    const [layoutVersion, setLayoutVersion] = useState(0);
+    const [bubbleStyleVersion, setBubbleStyleVersion] = useState(0);
+    const [petAnchor, setPetAnchor] = useState<PetVisualBounds | null>(null);
     const [currentRoute, setCurrentRoute] = useState(window.location.hash.slice(1) || '');
     /** 任务数量（用于设置面板显示） */
     const [taskCount, setTaskCount] = useState(0);
     /** 右键对话输入框状态 */
     const [showChatInput, setShowChatInput] = useState(false);
-    /** AI 对话历史 */
-    const chatHistoryRef = useRef<ChatMessage[]>([]);
     const hasShownGreeting = useRef(false);
     const bubbleRef = useRef<BubbleRef>(null);
     const appRef = useRef<HTMLDivElement>(null);
@@ -171,8 +134,7 @@ function App(): JSX.Element {
             }
         });
         
-        dialogueManager.startAutoDialogue();
-        dialogueManager.startHealthReminders();
+        dialogueManager.startScheduledDialogues();
         
         return () => {
             dialogueManager.destroy();
@@ -180,10 +142,30 @@ function App(): JSX.Element {
     }, []);
 
     /**
-     * 加载对话历史
+     * 加载对话历史 + 跨窗口同步（历史窗口清空后主窗口也能感知）
      */
     useEffect(() => {
         useChatStore.getState().loadFromStorage();
+        return initChatStorageSync();
+    }, []);
+
+    /** 视图布局覆盖：设置窗口修改后主窗口热更新 */
+    useEffect(() => {
+        return initSkinLayoutSync(() => {
+            setLayoutVersion(v => v + 1);
+            setBubbleStyleVersion(v => v + 1);
+        });
+    }, []);
+
+    /** 气泡样式：设置窗口修改后主窗口热更新 */
+    useEffect(() => {
+        return initBubbleStyleSync(() => {
+            setBubbleStyleVersion(v => v + 1);
+        });
+    }, []);
+
+    const handlePetBoundsChange = useCallback((bounds: PetVisualBounds | null) => {
+        setPetAnchor(bounds);
     }, []);
 
     /**
@@ -306,9 +288,10 @@ function App(): JSX.Element {
 
         const handleSkinSwitch = (skinId: string) => {
             setCurrentSkin(skinId);
-            const group = SKIN_GROUPS.find(g => g.skins.some(s => s.id === skinId));
-            if (group) {
-                setCurrentGroup(group.id);
+            const groupId = findGroupForSkin(skinId);
+            if (groupId) {
+                setCurrentGroup(groupId);
+                saveSkinPreference(groupId, skinId);
             }
             loadSkinStates(skinId);
         };
@@ -352,6 +335,17 @@ function App(): JSX.Element {
             };
             window.petAPI.on('reminder-badge-visibility', handleReminderBadgeVisibility);
 
+            const handleSkinLayoutChange = () => {
+                setLayoutVersion(v => v + 1);
+                setBubbleStyleVersion(v => v + 1);
+            };
+            window.petAPI.on('skin-layout-change', handleSkinLayoutChange);
+
+            const handleBubbleStyleChange = () => {
+                setBubbleStyleVersion(v => v + 1);
+            };
+            window.petAPI.on('bubble-style-change', handleBubbleStyleChange);
+
             return () => {
                 unsubscribe();
                 unsubscribeSkinSwitch();
@@ -360,7 +354,10 @@ function App(): JSX.Element {
                 window.petAPI.removeListener('pomodoro-visibility', handlePomodoroVisibility);
                 window.petAPI.removeListener('reminder-visibility', handleReminderVisibility);
                 window.petAPI.removeListener('todolauncher-visibility', handleTodoLauncherVisibility);
+                window.petAPI.removeListener('chat-history-visibility', handleChatHistoryVisibility);
                 window.petAPI.removeListener('reminder-badge-visibility', handleReminderBadgeVisibility);
+                window.petAPI.removeListener('skin-layout-change', handleSkinLayoutChange);
+                window.petAPI.removeListener('bubble-style-change', handleBubbleStyleChange);
             };
         }
 
@@ -391,18 +388,20 @@ function App(): JSX.Element {
     }, []);
 
     /**
-     * 单击桌宠时触发互动对话
+     * 左键桌宠：manifest 驱动动作 + 气泡（manifest 文案优先，否则 i18n tap 池）
      */
-    const handlePetClick = useCallback(() => {
-        const dialogueManager = getDialogueManager();
-        dialogueManager.showTapDialogue();
+    const handlePetInteract = useCallback((info: { reaction: string; bubbleText: string }) => {
+        if (!info.bubbleText || !bubbleRef.current) return;
+        bubbleRef.current.showMessage({ text: info.bubbleText, type: 'emotion', duration: 3200 });
+        useChatStore.getState().addMessage({ role: 'pet', content: info.bubbleText, source: 'phrase' });
     }, []);
 
     /**
-     * 双击桌宠：展示今日任务气泡面板
+     * 展示今日任务气泡（关闭底部输入栏，避免遮挡）
      */
-    const handlePetDoubleClick = useCallback(async () => {
+    const openTodoPanel = useCallback(async () => {
         if (!window.petAPI || !bubbleRef.current) return;
+        setShowChatInput(false);
         try {
             const tasks = await window.petAPI.taskGetAll();
             const todayTasks = tasks.filter((t: any) => isInTodayView(t));
@@ -413,10 +412,19 @@ function App(): JSX.Element {
                 priority: t.priority
             }));
             bubbleRef.current.showTodoPanel(bubbleTasks);
+            return todayTasks;
         } catch (e) {
             console.error('获取今日任务失败', e);
+            return null;
         }
     }, []);
+
+    /**
+     * 双击桌宠：展示今日任务气泡面板
+     */
+    const handlePetDoubleClick = useCallback(async () => {
+        await openTodoPanel();
+    }, [openTodoPanel]);
 
     /**
      * 右键桌宠：打开对话输入框
@@ -430,79 +438,19 @@ function App(): JSX.Element {
     /**
      * 对话命令处理（/task /remind /todo）
      */
-/** 提醒自然语言解析结果 */
-function parseReminderArgs(args: string): {
-    title: string;
-    type: ReminderType;
-    time: string;
-    date?: string;
-} {
-    const now = new Date();
-    let type: ReminderType = 'once';
-    let time = '09:00';
-    let date: string | undefined = undefined;
-    let title = args;
-
-    // 每天 → daily
-    if (/每天/.test(title)) { type = 'daily'; title = title.replace(/每天/, '') }
-    // 每周 → weekly（默认今天开始）
-    if (/每周/.test(title)) { type = 'weekly'; title = title.replace(/每周/, '') }
-    // 每月 → monthly
-    if (/每月/.test(title)) { type = 'monthly'; title = title.replace(/每月/, '') }
-
-    // 日期：明天 / 今天
-    if (/明天/.test(title)) {
-        const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
-        date = tomorrow.toISOString().slice(0, 10);
-        title = title.replace(/明天/, '');
-    }
-    if (/今天/.test(title)) {
-        date = now.toISOString().slice(0, 10);
-        title = title.replace(/今天/, '');
-    }
-
-    // 时间：下午3点 / 上午9点 / 3点半 / 15:00
-    const timeMatch = title.match(/(下午|上午|中午)?(\d{1,2})[点:：](\d{1,2})?(半)?/);
-    if (timeMatch) {
-        let hour = parseInt(timeMatch[2]);
-        const period = timeMatch[1];
-        let minute = timeMatch[3] ? parseInt(timeMatch[3]) : (timeMatch[4] === '半' ? 30 : 0);
-
-        if (period === '下午' && hour < 12) hour += 12;
-        if (period === '中午' && hour < 12) hour += 12;
-        if (period === '上午' && hour === 12) hour = 0;
-        // 无前缀且 <= 6 → 假定下午（如"3点" → 15:00）
-        if (!period && hour <= 6 && hour >= 1) hour += 12;
-
-        time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        title = title.replace(timeMatch[0], '');
-    }
-
-    // 清理多余空白和连接词
-    title = title.replace(/^[\s,，、]+|[\s,，、]+$/g, '');
-
-    return {
-        title: title || args.replace(/[每天每周每月今天明天]/g, '').trim() || args,
-        type,
-        time,
-        date: type === 'once' ? date : undefined,
-    };
-}
 
     const handleChatCommand = useCallback(async (command: string, args: string) => {
         if (!window.petAPI) return;
         if (command === '/todo') {
-            // 复用双击的任务面板逻辑
             try {
-                const tasks = await window.petAPI.taskGetAll();
-                const todayTasks = tasks.filter((t: any) => isInTodayView(t));
-                const bubbleTasks = todayTasks.slice(0, 6).map((t: any) => ({
-                    id: t.id,
-                    title: t.title,
-                    status: t.status,
-                    priority: t.priority
-                }));
-                bubbleRef.current?.showTodoPanel(bubbleTasks);
+                const todayTasks = await openTodoPanel();
+                if (!todayTasks) {
+                    bubbleRef.current?.showMessage({ text: '获取任务失败', type: 'system', duration: 3000 });
+                    useChatStore.getState().addMessage({
+                        role: 'pet', content: '获取任务失败', source: 'system',
+                    });
+                    return;
+                }
                 useChatStore.getState().addMessage({
                     role: 'pet', content: todayTasks.length > 0 ? `今日有 ${todayTasks.length} 个待办任务` : '今天没有待办任务', source: 'system',
                 });
@@ -559,7 +507,7 @@ function parseReminderArgs(args: string): {
                 role: 'pet', content: `已创建提醒: ${parsed.title}`, source: 'system',
             });
         }
-    }, []);
+    }, [openTodoPanel]);
 
     /**
      * 对话气泡显示（普通文本）
@@ -570,29 +518,43 @@ function parseReminderArgs(args: string): {
     }, []);
 
     /**
-     * 流式气泡更新（AI streaming 实时更新文本）
+     * 流式气泡：开始 / 更新 / 结束（结束后自动消失）
      */
+    const handleStreamStart = useCallback(() => {
+        bubbleRef.current?.startStream('emotion');
+    }, []);
+
     const handleChatBubbleStream = useCallback((text: string) => {
         bubbleRef.current?.updateStreamText(text);
     }, []);
 
-    /**
-     * 获取对话历史
-     */
-    const getChatHistory = useCallback((): ChatMessage[] => {
-        const systemMsg: ChatMessage = {
-            role: 'system',
-            content: '你是一个桌面宠物伙伴。说话可爱、元气、充满活力。回复简洁（不超过2句话），使用颜文字。当用户让你执行操作时，不需要回复"好的"之类的确认词，直接执行即可。'
-        };
-        return [systemMsg, ...chatHistoryRef.current.slice(-8)];
+    const handleStreamEnd = useCallback((text: string, duration = 8000) => {
+        bubbleRef.current?.finalizeStream(text, duration);
     }, []);
 
-    /**
-     * 添加到对话历史
-     */
-    const addToChatHistory = useCallback((msg: ChatMessage) => {
-        chatHistoryRef.current = [...chatHistoryRef.current.slice(-20), msg];
-    }, []);
+    /** 历史窗口重答时，通过 relay 在主窗口显示流式气泡 */
+    useEffect(() => {
+        if (!window.petAPI) return;
+
+        const onStreamStart = () => handleStreamStart();
+        const onStreamChunk = (_e: unknown, text: string) => handleChatBubbleStream(text);
+        const onStreamEnd = (_e: unknown, text: string) => handleStreamEnd(text);
+        const onStreamError = (_e: unknown, reason: string) => {
+            handleChatBubble(`${reason}`, 'system');
+        };
+
+        window.petAPI.on('chat-stream-start', onStreamStart);
+        window.petAPI.on('chat-stream-chunk', onStreamChunk);
+        window.petAPI.on('chat-stream-end', onStreamEnd);
+        window.petAPI.on('chat-stream-error', onStreamError);
+
+        return () => {
+            window.petAPI.removeListener('chat-stream-start', onStreamStart);
+            window.petAPI.removeListener('chat-stream-chunk', onStreamChunk);
+            window.petAPI.removeListener('chat-stream-end', onStreamEnd);
+            window.petAPI.removeListener('chat-stream-error', onStreamError);
+        };
+    }, [handleStreamStart, handleChatBubbleStream, handleStreamEnd, handleChatBubble]);
 
     /**
      * 处理调整大小开始
@@ -668,10 +630,17 @@ function parseReminderArgs(args: string): {
 
             if (newWidth !== startWidth || newHeight !== startHeight) {
                 setWindowSize({ width: newWidth, height: newHeight });
+                windowSizeRef.current = { width: newWidth, height: newHeight };
             }
         };
 
         const handleResizeEnd = () => {
+            if (resizeState.current.isResizing) {
+                const base = skinBaseSizeRef.current;
+                if (base.width > 0) {
+                    setWindowScale(windowSizeRef.current.width / base.width);
+                }
+            }
             resizeState.current.isResizing = false;
         };
 
@@ -689,10 +658,12 @@ function parseReminderArgs(args: string): {
     /**
      * 调整窗口大小
      */
-    const adjustWindowSize = useCallback((width: number, height: number) => {
-        setWindowSize({ width, height });
+    const adjustWindowSize = useCallback((payload: PetSizeChangePayload) => {
+        skinBaseSizeRef.current = payload.base;
+        setWindowSize({ width: payload.width, height: payload.height });
+        windowSizeRef.current = { width: payload.width, height: payload.height };
         if (window.petAPI) {
-            window.petAPI.setWindowSize(width, height);
+            window.petAPI.setWindowSize(payload.width, payload.height);
         }
     }, []);
 
@@ -790,8 +761,6 @@ function parseReminderArgs(args: string): {
                         </div>
                     </div>
 
-                    <Bubble ref={bubbleRef} />
-                    
                     {/* 拖拽手柄 */}
                     <div 
                         className="drag-handle"
@@ -808,8 +777,10 @@ function parseReminderArgs(args: string): {
                         <Pet
                             stateMachine={stateMachine}
                             skinFolder={currentSkin}
+                            layoutVersion={layoutVersion}
                             onSizeChange={adjustWindowSize}
-                            onClick={handlePetClick}
+                            onPetBoundsChange={handlePetBoundsChange}
+                            onInteract={handlePetInteract}
                             onDoubleClick={handlePetDoubleClick}
                         />
                     </div>
@@ -820,9 +791,16 @@ function parseReminderArgs(args: string): {
                         onClose={() => setShowChatInput(false)}
                         onCommand={handleChatCommand}
                         onBubble={handleChatBubble}
+                        onStreamStart={handleStreamStart}
                         onBubbleStream={handleChatBubbleStream}
-                        getHistory={getChatHistory}
-                        addToHistory={addToChatHistory}
+                        onStreamEnd={handleStreamEnd}
+                    />
+
+                    <Bubble
+                        ref={bubbleRef}
+                        petAnchor={petAnchor}
+                        skinId={currentSkin}
+                        styleVersion={bubbleStyleVersion}
                     />
         </div>
     );
