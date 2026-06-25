@@ -2,12 +2,16 @@ import { ipcMain, BrowserWindow } from 'electron';
 import { loadCharacterBundle } from './character/loader';
 import { spawn, ChildProcess } from 'child_process';
 import { petEventBus, PetState, PetEmotion, BubbleMessage } from './eventBus';
+import { requestAppQuit } from './appLifecycle';
 import { pomodoroTimer, PomodoroConfig } from './tools/pomodoro';
 import { reminderSystem, Reminder } from './tools/reminder';
 import { todoSystem, TodoTask, TaskFilter, TaskPriority } from './tools/todo';
 
 /** 是否已注册过 IPC handler */
 let handlersRegistered = false;
+
+/** 桌宠主窗口引用（用于事件转发，避免闭包过期） */
+let petMainWindow: BrowserWindow | null = null;
 
 /** 事件总线到渲染进程的 IPC channel 映射 */
 const IPC_CHANNELS = {
@@ -26,6 +30,7 @@ const IPC_CHANNELS = {
 export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     if (handlersRegistered) return;
     handlersRegistered = true;
+    petMainWindow = mainWindow;
 
     ipcMain.handle('character-get-bundle', () => loadCharacterBundle());
 
@@ -89,11 +94,10 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
     });
 
     /**
-     * 退出应用
-     * 直接调用 app.quit() 触发 before-quit 事件，绕过 close 的 preventDefault
+     * 退出应用：先标记退出再关闭所有窗口，避免 macOS 主窗口 hide 拦截
      */
     ipcMain.handle('quit-app', () => {
-        app.quit();
+        requestAppQuit();
     });
 
     /**
@@ -325,50 +329,54 @@ export function registerIpcHandlers(mainWindow: BrowserWindow): void {
         }
     });
 
-    // === 事件总线 → 渲染进程转发 ===
-
-    /**
-     * 转发状态变化事件
-     */
-    petEventBus.on('state-change', (newState: PetState) => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS['state-change'], newState);
-        }
-    });
-
-    /**
-     * 转发情绪变化事件
-     */
-    petEventBus.on('emotion-change', (newEmotion: PetEmotion) => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS['emotion-change'], newEmotion);
-        }
-    });
-
     /**
      * 转发气泡显示事件
      */
     petEventBus.on('show-bubble', (message: BubbleMessage) => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS['show-bubble'], message);
+        const win = petMainWindow;
+        if (!win || win.isDestroyed()) return;
+
+        if (message.type === 'reminder') {
+            if (!win.isVisible()) win.show();
+            win.focus();
         }
+
+        win.webContents.send(IPC_CHANNELS['show-bubble'], message);
     });
 
     /**
      * 转发气泡隐藏事件
      */
     petEventBus.on('hide-bubble', () => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS['hide-bubble']);
-        }
+        const win = petMainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(IPC_CHANNELS['hide-bubble']);
+    });
+
+    /**
+     * 转发状态变化事件
+     */
+    petEventBus.on('state-change', (newState: PetState) => {
+        const win = petMainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(IPC_CHANNELS['state-change'], newState);
+    });
+
+    /**
+     * 转发情绪变化事件
+     */
+    petEventBus.on('emotion-change', (newEmotion: PetEmotion) => {
+        const win = petMainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(IPC_CHANNELS['emotion-change'], newEmotion);
     });
 
     /**
      * 转发交互反应事件
      */
     petEventBus.on('play-reaction', (reaction: string) => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.webContents.send(IPC_CHANNELS['play-reaction'], reaction);
-        }
+        const win = petMainWindow;
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send(IPC_CHANNELS['play-reaction'], reaction);
     });
 }

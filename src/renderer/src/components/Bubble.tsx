@@ -91,9 +91,45 @@ const Bubble = forwardRef<BubbleRef, BubbleProps>(({
     }, []);
 
     /**
-     * 显示新消息（加入队列）
+     * 立即展示高优先级气泡（提醒 / 待办 / 带操作按钮）
+     */
+    const showPriorityMessage = useCallback((message: BubbleMessage) => {
+        if (timerRef.current) {
+            clearTimeout(timerRef.current);
+            timerRef.current = null;
+        }
+        queueRef.current = [];
+        isShowingRef.current = true;
+        setIsStreaming(false);
+        setStreamText(null);
+        setShowQuickAdd(false);
+        setQuickAddText('');
+        setCurrentMessage(message);
+        if (message.tasks) {
+            setLocalTasks(message.tasks);
+        } else {
+            setLocalTasks([]);
+        }
+        if (message.duration > 0) {
+            timerRef.current = setTimeout(() => {
+                processQueue();
+            }, message.duration);
+        }
+    }, [processQueue]);
+
+    /**
+     * 显示新消息（加入队列；提醒类优先打断当前气泡）
      */
     const showMessage = useCallback((message: BubbleMessage) => {
+        const isPriority = message.type === 'reminder'
+            || message.type === 'todo'
+            || (message.actions && message.actions.length > 0);
+
+        if (isPriority) {
+            showPriorityMessage(message);
+            return;
+        }
+
         setIsStreaming(false);
         setStreamText(null);
         queueRef.current.push(message);
@@ -101,7 +137,7 @@ const Bubble = forwardRef<BubbleRef, BubbleProps>(({
         if (!isShowingRef.current) {
             processQueue();
         }
-    }, [processQueue]);
+    }, [processQueue, showPriorityMessage]);
 
     /**
      * 立即隐藏当前消息并处理队列
@@ -296,6 +332,7 @@ const Bubble = forwardRef<BubbleRef, BubbleProps>(({
 
     const typeClass = currentMessage ? `bubble-${currentMessage.type}` : '';
     const isElevated = currentMessage?.type === 'todo'
+        || currentMessage?.type === 'reminder'
         || !!currentMessage?.tasks?.length
         || !!currentMessage?.actions?.length;
 
@@ -307,16 +344,19 @@ const Bubble = forwardRef<BubbleRef, BubbleProps>(({
         const ox = bubbleStyle.offsetX + skinPos.offsetX;
         const oy = bubbleStyle.offsetY + skinPos.offsetY;
 
-        if (petAnchor) {
+        const useAnchor = petAnchor && petAnchor.headTop > 40 && petAnchor.centerX > 0;
+
+        if (useAnchor && petAnchor) {
+            const anchorTop = Math.max(16, petAnchor.headTop - gap + oy);
             return {
                 left: petAnchor.centerX + ox,
-                top: petAnchor.headTop - gap + oy,
+                top: anchorTop,
             } as React.CSSProperties;
         }
 
         return {
             left: `calc(50% + ${ox}px)`,
-            top: 36 + oy,
+            top: Math.max(16, 48 + oy),
         } as React.CSSProperties;
     }, [petAnchor, bubbleStyle, skinPos]);
 

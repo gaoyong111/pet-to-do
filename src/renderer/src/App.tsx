@@ -27,6 +27,7 @@ import { initSkinLayoutSync } from './utils/skinLayoutOverride';
 import { initBubbleStyleSync } from './utils/bubbleStyle';
 import { setWindowScale } from './utils/skinLayout';
 import type { PetVisualBounds } from './utils/skinLayout';
+import { countRemindersScheduledForToday } from '../../shared/reminderToday';
 import './App.css';
 
 function getStateLabels(): Record<string, string> {
@@ -368,15 +369,14 @@ function App(): JSX.Element {
     }, [stateMachine, loadSkinStates]);
 
     /**
-     * 定时获取激活提醒数量，显示在图标徽标上
+     * 定时获取今日待触发提醒数量，显示在图标徽标上
      */
     useEffect(() => {
         const fetchReminderCount = async () => {
             if (!window.petAPI) return;
             try {
                 const reminders = await window.petAPI.reminderGetAll();
-                const active = reminders.filter((r: any) => r.enabled).length;
-                setReminderCount(active);
+                setReminderCount(countRemindersScheduledForToday(reminders));
             } catch {
                 // 静默失败
             }

@@ -105,7 +105,7 @@ class ReminderSystem {
 
     this.reminders.forEach(reminder => {
       if (!reminder.enabled) return;
-      if (reminder.time !== currentTime) return;
+      if (reminder.time !== this.normalizeTime(currentTime)) return;
 
       let shouldTrigger = false;
 
@@ -188,6 +188,15 @@ class ReminderSystem {
     return `${hours}:${minutes}`;
   }
 
+  /** 统一为 HH:mm，避免 "9:05" 与 "09:05" 不匹配 */
+  private normalizeTime(time: string): string {
+    const parts = time.split(':');
+    if (parts.length < 2) return time;
+    const hours = parts[0].padStart(2, '0');
+    const minutes = parts[1].padStart(2, '0');
+    return `${hours}:${minutes}`;
+  }
+
   /**
    * 格式化日期为 YYYY-MM-DD
    * @param date - 日期对象
@@ -222,11 +231,17 @@ class ReminderSystem {
    * @returns 添加后的提醒对象
    */
   addReminder(reminder: Omit<Reminder, 'id' | 'lastTriggered'>): Reminder {
+    const normalizedTime = this.normalizeTime(reminder.time);
     const newReminder: Reminder = {
       ...reminder,
+      time: normalizedTime,
       id: this.generateId(),
       priority: reminder.priority || 'medium' // 默认优先级为中等
     };
+
+    if (newReminder.type === 'once' && !newReminder.date) {
+      newReminder.date = this.formatDate(new Date());
+    }
     
     this.reminders.push(newReminder);
     this.saveReminders();
@@ -250,10 +265,25 @@ class ReminderSystem {
     const index = this.reminders.findIndex(r => r.id === id);
     if (index === -1) return null;
 
-    this.reminders[index] = {
-      ...this.reminders[index],
-      ...updates
+    const prev = this.reminders[index];
+    const nextType = updates.type ?? prev.type;
+    const merged: Reminder = {
+      ...prev,
+      ...updates,
+      time: updates.time ? this.normalizeTime(updates.time) : prev.time,
     };
+
+    if (nextType === 'once') {
+      if (!merged.date) {
+        merged.date = this.formatDate(new Date());
+      }
+    } else {
+      delete merged.date;
+    }
+    if (nextType !== 'weekly') delete merged.weekDays;
+    if (nextType !== 'monthly') delete merged.monthDay;
+
+    this.reminders[index] = merged;
     
     this.saveReminders();
     

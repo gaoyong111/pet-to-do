@@ -4,6 +4,7 @@ import { registerIpcHandlers } from './ipc';
 import { registerMsTodoIpc } from './tools/msToDoSync';
 import { todoSystem } from './tools/todo';
 import { reminderSystem } from './tools/reminder';
+import { isAppQuitting, markAppQuitting } from './appLifecycle';
 
 /** 桌宠窗口实例 */
 let mainWindow: BrowserWindow | null = null;
@@ -45,8 +46,7 @@ export function getChatHistoryWindow(): BrowserWindow | null {
     return chatHistoryWindow;
 }
 
-/** 正在退出标志，防止重复退出 */
-let isQuitting = false;
+/** 正在退出标志见 appLifecycle.ts */
 
 /**
  * 创建Todo窗口
@@ -321,7 +321,7 @@ function createMainWindow(): void {
 
     // 监听窗口关闭事件
     mainWindow.on('close', (event) => {
-        if (!isQuitting) {
+        if (!isAppQuitting()) {
             // 阻止默认关闭行为，改为隐藏窗口（macOS 风格）
             event.preventDefault();
             mainWindow?.hide();
@@ -353,7 +353,7 @@ app.whenReady().then(() => {
  * 应用退出前清理
  */
 app.on('before-quit', () => {
-    isQuitting = true;
+    markAppQuitting();
 });
 
 /**

@@ -243,9 +243,51 @@
 
 .reminder-meta {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #666;
+}
+
+.reminder-schedule {
+  color: #555;
+}
+
+.reminder-schedule--past {
+  color: #b45309;
+}
+
+.reminder-expired-tag {
+  font-size: 11px;
+  color: #c62828;
+  background: #fdecea;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.reminder-item.expired {
+  border-color: #fcd9d9;
+  background: #fffafa;
+}
+
+.form-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #868b98;
+}
+
+.form-hint--warn {
+  color: #b45309;
+}
+
+.form-error {
+  margin: 0;
+  font-size: 13px;
+  color: #c62828;
+  padding: 8px 10px;
+  background: #fdecea;
+  border-radius: 6px;
 }
 
 .reminder-type {

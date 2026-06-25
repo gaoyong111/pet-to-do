@@ -2,6 +2,73 @@ import { useState, useEffect, useCallback } from 'react';
 import { Reminder, ReminderType, WeekDay } from '../types';
 import './Reminder.css';
 
+function todayDateString(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function offsetDateString(dayOffset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + dayOffset);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseOnceDateTime(date: string, time: string): Date {
+  const [h, m] = time.split(':').map(v => parseInt(v, 10));
+  const d = new Date(`${date}T00:00:00`);
+  d.setHours(Number.isFinite(h) ? h : 0, Number.isFinite(m) ? m : 0, 0, 0);
+  return d;
+}
+
+function isOnceSchedulePast(date: string, time: string): boolean {
+  return parseOnceDateTime(date, time).getTime() <= Date.now();
+}
+
+function formatReminderDateLabel(dateStr: string): string {
+  const today = todayDateString();
+  const tomorrowStr = offsetDateString(1);
+  const yesterdayStr = offsetDateString(-1);
+
+  if (dateStr === today) return '今天';
+  if (dateStr === tomorrowStr) return '明天';
+  if (dateStr === yesterdayStr) return '昨天';
+
+  const [y, m, d] = dateStr.split('-');
+  if (y && m && d) return `${parseInt(m, 10)}月${parseInt(d, 10)}日`;
+  return dateStr;
+}
+
+function formatReminderSchedule(reminder: Reminder, weekDayLabels: Record<WeekDay, string>): string {
+  switch (reminder.type) {
+    case 'once':
+      if (reminder.date) {
+        return `${formatReminderDateLabel(reminder.date)} ${reminder.time}`;
+      }
+      return `${reminder.time}（未设日期）`;
+    case 'daily':
+      return `每天 ${reminder.time}`;
+    case 'weekly': {
+      const days = (reminder.weekDays || [])
+        .sort((a, b) => a - b)
+        .map(d => weekDayLabels[d as WeekDay])
+        .join('、');
+      return days ? `每周 ${days} · ${reminder.time}` : `每周 · ${reminder.time}`;
+    }
+    case 'monthly':
+      return reminder.monthDay
+        ? `每月${reminder.monthDay}日 · ${reminder.time}`
+        : `每月 · ${reminder.time}`;
+    default:
+      return reminder.time;
+  }
+}
+
 /**
  * 提醒窗口组件（独立窗口模式）
  * 显示和管理自定义提醒，无折叠按钮，始终展示完整面板
@@ -14,6 +81,7 @@ function ReminderApp(): JSX.Element {
     const saved = localStorage.getItem('pet-show-reminder-badge');
     return saved !== null ? saved === 'true' : true;
   });
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState<Omit<Reminder, 'id' | 'lastTriggered'>>({
     title: '',
     description: '',
@@ -63,7 +131,23 @@ function ReminderApp(): JSX.Element {
       time: '09:00',
       enabled: true
     });
+    setFormError(null);
     setEditingReminder(null);
+  }, []);
+
+  const handleTypeChange = useCallback((type: ReminderType) => {
+    setFormData(prev => {
+      const next = { ...prev, type };
+      if (type === 'once') {
+        next.date = prev.date || todayDateString();
+      } else {
+        delete next.date;
+      }
+      if (type !== 'weekly') delete next.weekDays;
+      if (type !== 'monthly') delete next.monthDay;
+      return next;
+    });
+    setFormError(null);
   }, []);
 
   const handleFormChange = useCallback((field: string, value: any) => {
@@ -71,6 +155,9 @@ function ReminderApp(): JSX.Element {
       ...prev,
       [field]: value
     }));
+    if (field === 'date' || field === 'time') {
+      setFormError(null);
+    }
   }, []);
 
   const handleWeekDayToggle = useCallback((day: WeekDay) => {
@@ -87,17 +174,42 @@ function ReminderApp(): JSX.Element {
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!window.petAPI) return;
+
+    if (formData.type === 'once') {
+      if (!formData.date) {
+        setFormError('请选择提醒日期');
+        return;
+      }
+      if (isOnceSchedulePast(formData.date, formData.time)) {
+        const ok = window.confirm(
+          '所选日期和时间已过，保存后不会再触发提醒。确定仍要保存吗？'
+        );
+        if (!ok) return;
+      }
+    }
+
+    if (formData.type === 'weekly' && (!formData.weekDays || formData.weekDays.length === 0)) {
+      setFormError('请至少选择一个星期');
+      return;
+    }
+
     try {
+      const payload = { ...formData };
+      if (payload.type !== 'once') delete payload.date;
+      if (payload.type !== 'weekly') delete payload.weekDays;
+      if (payload.type !== 'monthly') delete payload.monthDay;
+
       if (editingReminder) {
-        await window.petAPI.reminderUpdate(editingReminder.id, formData);
+        await window.petAPI.reminderUpdate(editingReminder.id, payload);
       } else {
-        await window.petAPI.reminderAdd(formData);
+        await window.petAPI.reminderAdd(payload);
       }
       resetForm();
       setShowAddForm(false);
       loadReminders();
     } catch (error) {
       console.error('保存提醒失败:', error);
+      setFormError('保存失败，请重试');
     }
   }, [formData, editingReminder, resetForm, loadReminders]);
 
@@ -108,11 +220,12 @@ function ReminderApp(): JSX.Element {
       description: reminder.description || '',
       type: reminder.type,
       time: reminder.time,
-      date: reminder.date,
+      date: reminder.type === 'once' ? (reminder.date || todayDateString()) : undefined,
       weekDays: reminder.weekDays,
       monthDay: reminder.monthDay,
       enabled: reminder.enabled
     });
+    setFormError(null);
     setShowAddForm(true);
   }, []);
 
@@ -206,7 +319,7 @@ function ReminderApp(): JSX.Element {
               <label>提醒类型</label>
               <select
                 value={formData.type}
-                onChange={(e) => handleFormChange('type', e.target.value as ReminderType)}
+                onChange={(e) => handleTypeChange(e.target.value as ReminderType)}
               >
                 <option value="once">一次性</option>
                 <option value="daily">每天</option>
@@ -230,10 +343,15 @@ function ReminderApp(): JSX.Element {
                 <label>日期</label>
                 <input
                   type="date"
-                  value={formData.date}
+                  value={formData.date || ''}
                   onChange={(e) => handleFormChange('date', e.target.value)}
                   required
                 />
+                {formData.date && isOnceSchedulePast(formData.date, formData.time) && (
+                  <p className="form-hint form-hint--warn">
+                    该日期时间已过，保存后不会触发（仍可留作记录）
+                  </p>
+                )}
               </div>
             )}
             
@@ -270,6 +388,8 @@ function ReminderApp(): JSX.Element {
               </div>
             )}
             
+            {formError && <p className="form-error">{formError}</p>}
+
             <div className="form-actions">
               <button type="submit" className="save-btn">
                 {editingReminder ? '更新' : '添加'}
@@ -284,13 +404,24 @@ function ReminderApp(): JSX.Element {
                 <p className="hint">点击 ＋ 添加提醒</p>
               </div>
             ) : (
-              reminders.map(reminder => (
-                <div key={reminder.id} className={`reminder-item ${!reminder.enabled ? 'disabled' : ''}`}>
+              reminders.map(reminder => {
+                const scheduleText = formatReminderSchedule(reminder, weekDayLabels);
+                const isExpiredOnce = reminder.type === 'once'
+                  && !!reminder.date
+                  && isOnceSchedulePast(reminder.date, reminder.time);
+
+                return (
+                <div key={reminder.id} className={`reminder-item ${!reminder.enabled ? 'disabled' : ''} ${isExpiredOnce ? 'expired' : ''}`}>
                   <div className="reminder-info">
                     <div className="reminder-title">{reminder.title}</div>
                     <div className="reminder-meta">
                       <span className="reminder-type">{getTypeLabel(reminder.type)}</span>
-                      <span className="reminder-time">{reminder.time}</span>
+                      <span className={`reminder-schedule ${isExpiredOnce ? 'reminder-schedule--past' : ''}`}>
+                        {scheduleText}
+                      </span>
+                      {isExpiredOnce && reminder.enabled && (
+                        <span className="reminder-expired-tag">已过期</span>
+                      )}
                     </div>
                   </div>
                   <div className="reminder-actions">
@@ -317,7 +448,8 @@ function ReminderApp(): JSX.Element {
                     </button>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

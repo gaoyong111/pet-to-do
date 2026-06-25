@@ -52,6 +52,6 @@ export function parseReminderArgs(args: string): ParsedReminder {
         title: title || args.replace(/[每天每周每月今天明天]/g, '').trim() || args,
         type,
         time,
-        date: type === 'once' ? date : undefined,
+        date: type === 'once' ? (date ?? now.toISOString().slice(0, 10)) : undefined,
     };
 }
